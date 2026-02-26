@@ -1,0 +1,18 @@
+{
+    "config": {
+        "step": {
+            "user": {
+                "title": "DSB Mobile Login",
+                "data": {
+                    "username": "Username (School ID)",
+                    "password": "Password"
+                }
+            }
+        },
+        "error": {
+            "invalid_auth": "Invalid credentials",
+            "cannot_connect": "Cannot connect to DSB API",
+            "unknown": "Unknown error"
+        }
+    }
+}

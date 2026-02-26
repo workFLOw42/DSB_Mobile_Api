@@ -1,0 +1,3 @@
+fetch_updates:
+  name: "DSB Plan manuell laden"
+  description: "Erzwingt eine sofortige Aktualisierung der Vertretungspläne, umgeht die Minuten-Sperre und ignoriert am Wochenende den Ferien-Check."

@@ -1,0 +1,11 @@
+{
+    "domain": "dsb_api",
+    "name": "DSB API",
+    "version": "1.0.0",
+    "documentation": "https://github.com/your-repo/dsb_api",
+    "dependencies": [],
+    "codeowners": [],
+    "requirements": ["beautifulsoup4>=4.9.0", "requests>=2.25.0"],
+    "iot_class": "cloud_polling",
+    "config_flow": true
+}
