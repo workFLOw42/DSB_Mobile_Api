@@ -19,7 +19,12 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DOMAIN, CONF_SCHEDULE_FILE
+from .const import (
+    DOMAIN,
+    CONF_SCHEDULE_FILE,
+    CONF_ENABLE_RAW_SENSOR,
+    DEFAULT_ENABLE_RAW_SENSOR,
+)
 from .dsb import DSB, DSBError
 
 _LOGGER = logging.getLogger(__name__)
@@ -353,7 +358,6 @@ class DSBCoordinator(DataUpdateCoordinator):
             all_raw_tables: List[Dict[str, Any]] = []
 
             for plan in plans:
-                # Collect raw table data (completely unfiltered)
                 all_raw_tables.extend(plan.raw_tables)
 
                 for day in plan.days:
@@ -379,7 +383,6 @@ class DSBCoordinator(DataUpdateCoordinator):
                         }
                     )
 
-            # Deduplicate parsed entries (for student sensor)
             all_entries = _deduplicate_entries(all_entries)
             for day_data in all_days:
                 day_data["entries"] = _deduplicate_entries(
@@ -423,19 +426,28 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][config_entry.entry_id]
     client = data["client"]
     schedule_file = config_entry.data.get(CONF_SCHEDULE_FILE, "")
+    enable_raw = config_entry.data.get(
+        CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+    )
 
     coordinator = DSBCoordinator(hass, client, schedule_file)
 
     if schedule_file:
         await hass.async_add_executor_job(coordinator.load_schedule)
 
-    # Initial fetch
     await coordinator.async_config_entry_first_refresh()
 
-    entities: list[SensorEntity] = [
-        DSBRawSensor(coordinator, config_entry),
-    ]
+    entities: list[SensorEntity] = []
 
+    # ── Schulinfo Sensor (always created) ──
+    entities.append(DSBSchulInfoSensor(coordinator, config_entry))
+
+    # ── Raw Sensor (optional, for debugging) ──
+    if enable_raw:
+        entities.append(DSBRawSensor(coordinator, config_entry))
+        _LOGGER.info("Raw debug sensor enabled")
+
+    # ── Student Sensor (if schedule configured) ──
     if coordinator.schedule:
         entities.append(
             DSBStudentSensor(coordinator, config_entry)
@@ -477,12 +489,106 @@ async def async_setup_entry(
 
 
 # ──────────────────────────────────────────────
-#  Sensor 1: Raw (all classes, all days, unfiltered)
+#  Sensor 1: Schulinfo (compact, always on)
+# ──────────────────────────────────────────────
+
+
+class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
+    """School info sensor – daily announcements and metadata.
+
+    Extracts info, title, and headers from DSB pages.
+    Lightweight – no heavy row data.
+    """
+
+    def __init__(
+        self,
+        coordinator: DSBCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{config_entry.entry_id}_schulinfo"
+        self._attr_name = "DSB Schulinfo"
+        self._attr_icon = "mdi:bulletin-board"
+
+    def _build_schulinfo(self) -> Dict[str, Any]:
+        """Build compact school info from raw tables."""
+        if not self.coordinator.data:
+            return {}
+        raw_tables = self.coordinator.data.get("raw_tables", [])
+        info_by_date: Dict[str, Any] = {}
+
+        for table in raw_tables:
+            date_str = str(table.get("date", ""))[:10]
+            if not date_str:
+                continue
+
+            # Parse info lines into clean strings
+            info_lines = []
+            for info_row in table.get("info", []):
+                line = " ".join(
+                    str(cell).strip()
+                    for cell in info_row
+                    if str(cell).strip()
+                )
+                if line:
+                    info_lines.append(line)
+
+            # Parse mon_heads for timestamp
+            stand = ""
+            for head in table.get("mon_heads", []):
+                if "Stand:" in str(head):
+                    parts = str(head).split("Stand:")
+                    if len(parts) > 1:
+                        stand = parts[1].strip()
+
+            info_by_date[date_str] = {
+                "title": table.get("title", ""),
+                "nachrichten": info_lines,
+                "stand": stand,
+                "klassen_betroffen": table.get(
+                    "class_groups", []
+                ),
+                "total_eintraege": table.get("total_rows", 0),
+                "url": table.get("url", ""),
+            }
+
+        return info_by_date
+
+    @property
+    def native_value(self) -> int:
+        """Number of days with school info."""
+        return len(self._build_schulinfo())
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        info = self._build_schulinfo()
+        return {
+            "tage": info,
+            "dates": sorted(info.keys()),
+            "last_updated": (
+                self.coordinator.data.get("last_updated")
+                if self.coordinator.data
+                else None
+            ),
+        }
+
+    @property
+    def unit_of_measurement(self) -> str:
+        return "Tage"
+
+
+# ──────────────────────────────────────────────
+#  Sensor 2: Raw (optional, for debugging)
 # ──────────────────────────────────────────────
 
 
 class DSBRawSensor(CoordinatorEntity, SensorEntity):
-    """All raw DSB substitution data – completely unfiltered."""
+    """All raw DSB substitution data – for debugging.
+
+    Must be enabled via integration options.
+    Contains all parsed entries without class filtering.
+    Does NOT include all_rows to stay under 16KB.
+    """
 
     def __init__(
         self,
@@ -493,6 +599,7 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
         self._attr_unique_id = f"{config_entry.entry_id}_raw"
         self._attr_name = "DSB API Raw"
         self._attr_icon = "mdi:calendar-text"
+        self._attr_entity_registry_enabled_default = False
 
     @property
     def native_value(self) -> int:
@@ -500,18 +607,32 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
             return self.coordinator.data.get("count", 0)
         return 0
 
+    def _slim_raw_tables(self) -> List[Dict[str, Any]]:
+        """Strip heavy all_rows, keep useful metadata."""
+        raw_tables = self.coordinator.data.get("raw_tables", [])
+        slim = []
+        for table in raw_tables:
+            slim.append({
+                "url": table.get("url"),
+                "date": table.get("date"),
+                "title": table.get("title"),
+                "info": table.get("info", []),
+                "mon_heads": table.get("mon_heads", []),
+                "headers": table.get("headers", []),
+                "class_groups": table.get("class_groups", []),
+                "total_rows": table.get("total_rows", 0),
+            })
+        return slim
+
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         if not self.coordinator.data:
             return {}
         return {
-            # Parsed & deduplicated entries (structured)
             "entries": self.coordinator.data.get("entries", []),
             "days": self.coordinator.data.get("days", []),
-            # Completely unfiltered raw table data
-            "raw_tables": self.coordinator.data.get(
-                "raw_tables", []
-            ),
+            "day_count": self.coordinator.data.get("day_count", 0),
+            "raw_tables": self._slim_raw_tables(),
             "raw_table_count": self.coordinator.data.get(
                 "raw_table_count", 0
             ),
@@ -522,7 +643,7 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
 
 
 # ──────────────────────────────────────────────
-#  Sensor 2: Student – single sensor, date-keyed
+#  Sensor 3: Student – single sensor, date-keyed
 # ──────────────────────────────────────────────
 
 
@@ -551,7 +672,6 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         config_entry: ConfigEntry,
     ) -> None:
         super().__init__(coordinator)
-        # Use student name + class for unique & friendly naming
         meta = coordinator.schedule.get("meta", {})
         schueler = meta.get("schueler", "DSB")
         klasse = meta.get("klasse", "")
@@ -624,11 +744,7 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         return days
 
     def _compute_data_hash(self) -> str:
-        """Compute a hash over all relevant raw DSB fields.
-
-        Only changes when actual substitution data changes,
-        not on metadata like last_updated.
-        """
+        """Compute a hash over all relevant raw DSB fields."""
         filtered_by_date = self._get_filtered_by_date()
 
         hash_entries = []

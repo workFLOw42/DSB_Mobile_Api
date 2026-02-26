@@ -10,10 +10,11 @@
         }
       },
       "schedule": {
-        "title": "Timetable (optional)",
-        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Leave empty to use only the raw sensor without student-specific merging.",
+        "title": "Settings",
+        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Leave empty to use only the raw sensor.",
         "data": {
-          "schedule_file": "Schedule filename (e.g. stundenplan.yaml)"
+          "schedule_file": "Schedule filename (e.g. stundenplan.yaml)",
+          "enable_raw_sensor": "Enable Raw Debug Sensor (all classes, large data)"
         }
       }
     },
@@ -28,9 +29,10 @@
     "step": {
       "init": {
         "title": "DSB API Settings",
-        "description": "Change the timetable file. Leave empty to disable student-specific sensor. File must be in {config_dir}.",
+        "description": "Change settings. File must be in {config_dir}.",
         "data": {
-          "schedule_file": "Schedule filename"
+          "schedule_file": "Schedule filename",
+          "enable_raw_sensor": "Enable Raw Debug Sensor"
         }
       }
     },
