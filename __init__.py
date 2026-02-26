@@ -19,10 +19,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     username = entry.data.get("username")
     password = entry.data.get("password")
-
     client = DSB(username, password)
 
-    # Test connection BEFORE forwarding to platforms
     try:
         valid = await hass.async_add_executor_job(client.test_connection)
         if not valid:
@@ -39,14 +37,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Listen for options updates (schedule file change)
+    entry.async_on_unload(
+        entry.add_update_listener(_async_update_listener)
+    )
+
     return True
 
 
-async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+async def _async_update_listener(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Handle options update – reload integration."""
+    await hass.config_entries.async_reload(entry.entry_id)
 
+
+async def async_unload_entry(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
+    """Unload a config entry."""
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, PLATFORMS
+    )
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
-
     return unload_ok
