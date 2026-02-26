@@ -7,7 +7,13 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 
-from .const import DOMAIN, CONF_SCHEDULE_FILE, DEFAULT_SCHEDULE_FILE
+from .const import (
+    DOMAIN,
+    CONF_SCHEDULE_FILE,
+    CONF_ENABLE_RAW_SENSOR,
+    DEFAULT_SCHEDULE_FILE,
+    DEFAULT_ENABLE_RAW_SENSOR,
+)
 from .dsb import DSB, DSBError
 
 _LOGGER = logging.getLogger(__name__)
@@ -32,7 +38,6 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     client.test_connection
                 )
                 if valid:
-                    # Store credentials, move to schedule step
                     self._user_data = user_input
                     return await self.async_step_schedule()
                 else:
@@ -55,13 +60,17 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_schedule(self, user_input=None) -> FlowResult:
-        """Handle the schedule file step (optional)."""
+        """Handle the schedule file + options step."""
         errors = {}
 
         if user_input is not None:
-            schedule_file = user_input.get(CONF_SCHEDULE_FILE, "").strip()
+            schedule_file = user_input.get(
+                CONF_SCHEDULE_FILE, ""
+            ).strip()
+            enable_raw = user_input.get(
+                CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+            )
 
-            # Validate file exists if provided
             if schedule_file:
                 path = self.hass.config.path(schedule_file)
                 exists = await self.hass.async_add_executor_job(
@@ -79,6 +88,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 data = {
                     **self._user_data,
                     CONF_SCHEDULE_FILE: schedule_file,
+                    CONF_ENABLE_RAW_SENSOR: enable_raw,
                 }
 
                 title = f"DSB ({self._user_data['username']})"
@@ -98,6 +108,10 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_SCHEDULE_FILE,
                         default=DEFAULT_SCHEDULE_FILE,
                     ): str,
+                    vol.Optional(
+                        CONF_ENABLE_RAW_SENSOR,
+                        default=DEFAULT_ENABLE_RAW_SENSOR,
+                    ): bool,
                 }
             ),
             description_placeholders={
@@ -108,12 +122,12 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        """Options flow to change schedule file later."""
+        """Options flow to change settings later."""
         return DSBOptionsFlow(config_entry)
 
 
 class DSBOptionsFlow(config_entries.OptionsFlow):
-    """Handle options for DSB API (change schedule file)."""
+    """Handle options for DSB API."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self._config_entry = config_entry
@@ -123,7 +137,12 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
         errors = {}
 
         if user_input is not None:
-            schedule_file = user_input.get(CONF_SCHEDULE_FILE, "").strip()
+            schedule_file = user_input.get(
+                CONF_SCHEDULE_FILE, ""
+            ).strip()
+            enable_raw = user_input.get(
+                CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+            )
 
             if schedule_file:
                 path = self.hass.config.path(schedule_file)
@@ -134,10 +153,10 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
                     errors[CONF_SCHEDULE_FILE] = "file_not_found"
 
             if not errors:
-                # Update the config entry data with new schedule file
                 new_data = {
                     **self._config_entry.data,
                     CONF_SCHEDULE_FILE: schedule_file,
+                    CONF_ENABLE_RAW_SENSOR: enable_raw,
                 }
                 self.hass.config_entries.async_update_entry(
                     self._config_entry, data=new_data
@@ -146,6 +165,9 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
 
         current_file = self._config_entry.data.get(
             CONF_SCHEDULE_FILE, ""
+        )
+        current_raw = self._config_entry.data.get(
+            CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
         )
 
         return self.async_show_form(
@@ -156,6 +178,10 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
                         CONF_SCHEDULE_FILE,
                         default=current_file,
                     ): str,
+                    vol.Optional(
+                        CONF_ENABLE_RAW_SENSOR,
+                        default=current_raw,
+                    ): bool,
                 }
             ),
             description_placeholders={
