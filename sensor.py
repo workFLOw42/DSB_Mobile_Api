@@ -1,10 +1,10 @@
-"""DSB API Sensor for Home Assistant – intelligent scheduling."""
+"""DSB API Sensor for Home Assistant – scheduling via HA automations."""
 import hashlib
 import json
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import yaml
@@ -19,16 +19,10 @@ from homeassistant.helpers.update_coordinator import (
     UpdateFailed,
 )
 
-from .const import DOMAIN
+from .const import DOMAIN, CONF_SCHEDULE_FILE
 from .dsb import DSB, DSBError
 
 _LOGGER = logging.getLogger(__name__)
-
-# Polling interval stays at 1 minute – the coordinator decides
-# internally whether an actual API call is needed.
-POLL_INTERVAL = timedelta(minutes=1)
-
-SCHEDULE_FILENAME = "SFG_Stundenplan.yaml"
 
 WOCHENTAG_MAP = {
     0: "montag",
@@ -38,29 +32,17 @@ WOCHENTAG_MAP = {
     4: "freitag",
 }
 
-# Minutes before lesson start to trigger a fetch
-PRE_LESSON_MINUTES = 15
-
-# Morning phase: fetch every 15 minutes in this window
-# Ends at 07:44 to avoid overlap with first pre-lesson fetch at 07:45 [1]
-MORNING_START = "06:30"
-MORNING_END = "07:44"
-
-# Final fetch time on school days (for alarm clock automation)
-EVENING_FETCH_TIME = "19:30"
-
-# Weekend/holiday: fetch at these times on the day before school resumes
-PRE_SCHOOL_TIMES = ("12:00", "19:00")
-
 
 # ──────────────────────────────────────────────
 #  Helper Functions
 # ──────────────────────────────────────────────
 
 
-def _load_schedule(hass: HomeAssistant) -> Dict[str, Any]:
-    """Load schedule YAML from /config/SFG_Stundenplan.yaml."""
-    path = hass.config.path(SCHEDULE_FILENAME)
+def _load_schedule(hass: HomeAssistant, filename: str) -> Dict[str, Any]:
+    """Load schedule YAML from HA config directory."""
+    if not filename:
+        return {}
+    path = hass.config.path(filename)
     _LOGGER.debug("Looking for schedule at: %s", path)
     if not os.path.exists(path):
         _LOGGER.warning("Schedule file not found: %s", path)
@@ -101,11 +83,7 @@ def _deduplicate_entries(
 
 
 def _parse_stunde_range(stunde_str: str) -> List[str]:
-    """Parse 'Stunde' field into individual lesson numbers.
-
-    '5'     -> ['5']
-    '5 - 6' -> ['5', '6']
-    """
+    """Parse 'Stunde' field: '5' -> ['5'], '5 - 6' -> ['5', '6']."""
     stunde_str = str(stunde_str).strip()
     match = re.match(r"(\d+)\s*-\s*(\d+)", stunde_str)
     if match:
@@ -122,11 +100,9 @@ def _matches_exclude(
     """Check if a DSB entry matches any exclude rule."""
     entry_fach = str(entry.get("Fach", "")).strip().upper()
     entry_lehrer = str(entry.get("(Lehrer)", "")).strip().upper()
-
     for rule in exclude_rules:
         rule_fach = str(rule.get("fach", "")).strip().upper()
         rule_lehrer = str(rule.get("lehrer", "")).strip().upper()
-
         if rule_fach and rule_fach == entry_fach:
             if rule_lehrer:
                 if rule_lehrer == entry_lehrer:
@@ -141,16 +117,11 @@ def _filter_for_klasse(
     klasse: str,
     exclude_rules: List[Dict],
 ) -> List[Dict[str, Any]]:
-    """Filter entries for a specific class and apply exclude rules.
-
-    Samuel is in group ANT [2] so entries for E1 with teacher YOU
-    are excluded via the exclude rules from SFG_Stundenplan.yaml.
-    """
+    """Filter entries for a specific class and apply exclude rules."""
     filtered = []
     for entry in entries:
         klassen_str = str(entry.get("Klasse(n)", ""))
         klassen_list = [k.strip() for k in klassen_str.split(",")]
-
         if klasse not in klassen_list:
             continue
         if _matches_exclude(entry, exclude_rules):
@@ -191,41 +162,29 @@ def _find_dsb_for_stunde(
     plan_fach: str,
     plan_lehrer: str,
 ) -> Optional[Dict[str, Any]]:
-    """Find the best matching DSB entry for a specific lesson.
-
-    Uses scoring: +20 for teacher match, +10 for exact subject match,
-    +5 for partial subject match. Teacher matching uses the known
-    teachers from SFG_Stundenplan.yaml (e.g. ANT for E1 [2]).
-    """
+    """Find the best matching DSB entry for a specific lesson."""
     candidates = []
     for entry in dsb_entries:
         if stunde in _parse_stunde_range(entry.get("Stunde", "")):
             candidates.append(entry)
-
     if not candidates:
         return None
-
     best: Optional[Dict[str, Any]] = None
     best_score = -1
-
     for entry in candidates:
         score = 0
         e_fach = str(entry.get("Fach", "")).strip().upper()
         e_lehrer = str(entry.get("(Lehrer)", "")).strip().upper()
-
         if e_fach == plan_fach.upper():
             score += 10
         elif plan_fach.upper() in e_fach or e_fach in plan_fach.upper():
             score += 5
-
         if plan_lehrer and plan_lehrer not in ("?", ""):
             if e_lehrer == plan_lehrer.upper():
                 score += 20
-
         if score > best_score:
             best_score = score
             best = entry
-
     return best
 
 
@@ -261,7 +220,6 @@ def _merge_schedule_with_dsb(
 ) -> Dict[str, Any]:
     """Merge one day of the timetable with DSB substitution entries."""
     merged: Dict[str, Any] = {}
-
     for stunde, plan_info in schedule_day.items():
         result = {
             "fach": plan_info.get("fach", "?"),
@@ -275,22 +233,21 @@ def _merge_schedule_with_dsb(
             "dsb_art": None,
             "changes": None,
         }
-
         dsb_match = _find_dsb_for_stunde(
             stunde,
             dsb_entries,
             plan_info.get("fach", ""),
             plan_info.get("lehrer", "?"),
         )
-
         if dsb_match:
-            status = _determine_status(dsb_match, plan_info.get("raum", ""))
+            status = _determine_status(
+                dsb_match, plan_info.get("raum", "")
+            )
             result["status"] = status
             result["dsb_text"] = dsb_match.get("Text", "")
             result["dsb_art"] = dsb_match.get("Art", "")
             result["vertreter"] = dsb_match.get("Vertreter", "")
             result["changes"] = dsb_match
-
             if status == "entfall":
                 result["raum"] = "---"
             elif status in ("raum_aenderung", "vertretung", "betreuung"):
@@ -298,63 +255,64 @@ def _merge_schedule_with_dsb(
                 if dsb_raum and dsb_raum != "---":
                     result["original_raum"] = plan_info.get("raum", "?")
                     result["raum"] = dsb_raum
-
         merged[stunde] = result
-
     return merged
 
 
-def _time_str(h: int, m: int) -> str:
-    """Format hour/minute as HH:MM."""
-    return f"{h:02d}:{m:02d}"
-
-
 # ──────────────────────────────────────────────
-#  Coordinator with intelligent scheduling
+#  Coordinator – no auto-polling, service-driven
 # ──────────────────────────────────────────────
 
 
 class DSBCoordinator(DataUpdateCoordinator):
-    """Coordinator for DSB API data updates with smart fetch timing.
+    """Coordinator for DSB API data.
 
-    Fetch schedule on school days:
-    - Morning phase (06:30–07:44): every 15 minutes
-    - Pre-lesson: 15 min before each lesson start [1]
-    - Afternoon (after last lesson until 19:29): hourly at minute 0
-    - Evening: final fetch at 19:30 (for alarm clock automation)
-
-    Weekend/holiday:
-    - No fetches except day before school resumes (12:00, 19:00)
+    Does NOT poll automatically. Call dsb_api.fetch_updates
+    from a Home Assistant automation to trigger a fetch.
     """
 
-    def __init__(self, hass: HomeAssistant, client: DSB) -> None:
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        client: DSB,
+        schedule_file: str,
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
             name="DSB API",
-            update_interval=POLL_INTERVAL,
+            update_interval=None,
         )
         self.client = client
-        self._force_next_update = False
+        self._schedule_file = schedule_file
         self._schedule_data: Dict[str, Any] = {}
         self._schedule_loaded = False
-        self._last_fetch_key: Optional[Tuple] = None
 
     # ── schedule access ──
 
+    @property
+    def schedule_file(self) -> str:
+        return self._schedule_file
+
     def load_schedule(self) -> None:
         """Load or reload the schedule YAML."""
-        self._schedule_data = _load_schedule(self.hass)
+        self._schedule_data = _load_schedule(
+            self.hass, self._schedule_file
+        )
         self._schedule_loaded = bool(self._schedule_data)
         if self._schedule_loaded:
             meta = self._schedule_data.get("meta", {})
             _LOGGER.info(
-                "Schedule loaded: %s (%s)",
+                "Schedule loaded: %s (%s) from %s",
                 meta.get("schueler", "?"),
                 meta.get("klasse", "?"),
+                self._schedule_file,
             )
-        else:
-            _LOGGER.warning("Schedule could not be loaded")
+        elif self._schedule_file:
+            _LOGGER.warning(
+                "Schedule could not be loaded from %s",
+                self._schedule_file,
+            )
 
     @property
     def schedule(self) -> Dict[str, Any]:
@@ -372,139 +330,18 @@ class DSBCoordinator(DataUpdateCoordinator):
     def stundenplan(self) -> Dict[str, Any]:
         return self._schedule_data.get("stundenplan", {})
 
-    # ── intelligent scheduling ──
-
-    def _get_fetch_times_for_day(self, wochentag: str) -> Set[str]:
-        """Calculate fetch times: 15 min before each lesson on this day.
-
-        Based on the timetable from SFG_Stundenplan.yaml [1].
-        E.g. Monday: 07:45, 08:30, 09:35, 10:20, 11:20, 12:05
-        Tuesday (with lessons 7+8): adds 12:50, 13:35
-        """
-        schedule_day = self.stundenplan.get(wochentag, {})
-        fetch_times: Set[str] = set()
-
-        for stunde_info in schedule_day.values():
-            uhrzeit = str(stunde_info.get("uhrzeit", ""))
-            start_str = uhrzeit.split("-")[0].strip()
-            if not start_str or ":" not in start_str:
-                continue
-            try:
-                h, m = int(start_str[:2]), int(start_str[3:5])
-                fetch_dt = datetime.now().replace(
-                    hour=h, minute=m, second=0
-                ) - timedelta(minutes=PRE_LESSON_MINUTES)
-                fetch_times.add(_time_str(fetch_dt.hour, fetch_dt.minute))
-            except (ValueError, IndexError):
-                continue
-
-        return fetch_times
-
-    def _get_last_lesson_end(self, wochentag: str) -> str:
-        """Get the end time of the last lesson on this day."""
-        schedule_day = self.stundenplan.get(wochentag, {})
-        latest = "13:05"
-
-        for stunde_info in schedule_day.values():
-            uhrzeit = str(stunde_info.get("uhrzeit", ""))
-            parts = uhrzeit.split("-")
-            if len(parts) == 2:
-                end_str = parts[1].strip()
-                if end_str > latest:
-                    latest = end_str
-
-        return latest
-
-    def _is_ferien_heute(self) -> bool:
-        """Check holiday status using existing HA input_boolean."""
-        state = self.hass.states.get("input_boolean.ferien_status_heute")
-        return state is not None and state.state == "on"
-
-    def _is_ferien_morgen(self) -> bool:
-        """Check tomorrow's holiday status."""
-        state = self.hass.states.get("input_boolean.ferien_status_morgen")
-        return state is not None and state.state == "on"
-
-    def _should_fetch(self, now: datetime) -> bool:
-        """Determine whether to make an actual API call right now.
-
-        Timeline on a school day (e.g. Tuesday with lessons 1-5,7-8) [1]:
-          06:30 06:45 07:00 07:15 07:30    Morning phase (every 15 min)
-          07:45 08:30 09:35 10:20 11:20    Pre-lesson (15 min before start)
-          12:50 13:35                       Pre-lesson (lessons 7+8)
-          15:00 16:00 17:00 18:00 19:00    Afternoon (hourly)
-          19:30                             Final evening fetch
-        """
-        # Prevent double-fetch in the same minute
-        fetch_key = (now.date(), now.hour, now.minute)
-        if self._last_fetch_key == fetch_key:
-            return False
-
-        wochentag = WOCHENTAG_MAP.get(now.weekday())
-        zeit = _time_str(now.hour, now.minute)
-        is_weekend = wochentag is None
-        is_ferien = self._is_ferien_heute()
-
-        # ── WEEKEND or HOLIDAY ──
-        if is_weekend or is_ferien:
-            # Sunday before a school Monday
-            if is_weekend and now.weekday() == 6:
-                if not self._is_ferien_morgen():
-                    return zeit in PRE_SCHOOL_TIMES
-            # Last day of holiday (weekday) before school resumes
-            elif not is_weekend and is_ferien:
-                if not self._is_ferien_morgen():
-                    return zeit in PRE_SCHOOL_TIMES
-            return False
-
-        # ── SCHOOL DAY: Morning phase (06:30–07:44, every 15 min) ──
-        if MORNING_START <= zeit <= MORNING_END:
-            if now.minute in (0, 15, 30, 45):
-                return True
-
-        # ── SCHOOL DAY: Pre-lesson fetches (15 min before each lesson) ──
-        fetch_times = self._get_fetch_times_for_day(wochentag)
-        if zeit in fetch_times:
-            return True
-
-        # ── SCHOOL DAY: Afternoon phase (hourly at :00) ──
-        last_end = self._get_last_lesson_end(wochentag)
-        if last_end <= zeit < EVENING_FETCH_TIME:
-            if now.minute == 0:
-                return True
-
-        # ── SCHOOL DAY: Final evening fetch at 19:30 ──
-        if zeit == EVENING_FETCH_TIME:
-            return True
-
-        return False
-
-    # ── refresh ──
-
-    async def async_force_refresh(self) -> None:
-        """Force an immediate data refresh (manual trigger)."""
-        self._force_next_update = True
-        await self.async_refresh()
+    # ── data fetch ──
 
     async def _async_update_data(self) -> Dict[str, Any]:
-        """Fetch data from DSB API based on intelligent schedule."""
+        """Fetch data from DSB API."""
         now = datetime.now()
 
-        if not self._schedule_loaded:
+        if not self._schedule_loaded and self._schedule_file:
             await self.hass.async_add_executor_job(self.load_schedule)
 
-        # Decide whether to actually call the API
-        if (
-            self.data is not None
-            and not self._force_next_update
-            and not self._should_fetch(now)
-        ):
-            return self.data
-
-        self._force_next_update = False
-        self._last_fetch_key = (now.date(), now.hour, now.minute)
-
-        _LOGGER.debug("Fetching DSB data at %s", now.strftime("%H:%M"))
+        _LOGGER.info(
+            "Fetching DSB data at %s", now.strftime("%H:%M:%S")
+        )
 
         try:
             plans = await self.hass.async_add_executor_job(
@@ -526,7 +363,6 @@ class DSBCoordinator(DataUpdateCoordinator):
                             _LOGGER.debug(
                                 "Error converting entry: %s", exc
                             )
-
                     all_days.append(
                         {
                             "date": (
@@ -539,7 +375,6 @@ class DSBCoordinator(DataUpdateCoordinator):
                         }
                     )
 
-            # Deduplicate
             all_entries = _deduplicate_entries(all_entries)
             for day_data in all_days:
                 day_data["entries"] = _deduplicate_entries(
@@ -562,7 +397,9 @@ class DSBCoordinator(DataUpdateCoordinator):
             _LOGGER.exception("Unexpected error: %s", err)
             if self.data:
                 return self.data
-            raise UpdateFailed(f"Unexpected error: {err}") from err
+            raise UpdateFailed(
+                f"Unexpected error: {err}"
+            ) from err
 
 
 # ──────────────────────────────────────────────
@@ -578,44 +415,54 @@ async def async_setup_entry(
     """Set up DSB API sensors from config entry."""
     data = hass.data[DOMAIN][config_entry.entry_id]
     client = data["client"]
+    schedule_file = config_entry.data.get(CONF_SCHEDULE_FILE, "")
 
-    coordinator = DSBCoordinator(hass, client)
-    await hass.async_add_executor_job(coordinator.load_schedule)
+    coordinator = DSBCoordinator(hass, client, schedule_file)
+
+    if schedule_file:
+        await hass.async_add_executor_job(coordinator.load_schedule)
+
+    # Initial fetch
     await coordinator.async_config_entry_first_refresh()
 
     entities: list[SensorEntity] = [
-        DSBRawSensor(coordinator),
+        DSBRawSensor(coordinator, config_entry),
     ]
 
     if coordinator.schedule:
-        entities.append(DSBStudentSensor(coordinator))
+        entities.append(
+            DSBStudentSensor(coordinator, config_entry)
+        )
         _LOGGER.info(
-            "Student sensor 'sensor.sfg_dsb_vertretungsplan' created for %s (%s)",
+            "Student sensor created for %s (%s) using %s",
             coordinator.schedule.get("meta", {}).get("schueler", "?"),
             coordinator.klasse,
+            schedule_file,
         )
-    else:
+    elif schedule_file:
         _LOGGER.warning(
-            "No schedule at %s – student sensor not created",
-            hass.config.path(SCHEDULE_FILENAME),
+            "Schedule file '%s' configured but could not be loaded",
+            schedule_file,
         )
 
     async_add_entities(entities)
 
     # ── Services ──
 
-    async def handle_manual_refresh(call: ServiceCall) -> None:
-        """Force an immediate API call."""
-        await coordinator.async_force_refresh()
+    async def handle_fetch_updates(call: ServiceCall) -> None:
+        """Force an immediate API fetch."""
+        await coordinator.async_refresh()
 
     async def handle_reload_schedule(call: ServiceCall) -> None:
-        """Reload SFG_Stundenplan.yaml without HA restart."""
+        """Reload schedule YAML without HA restart."""
         await hass.async_add_executor_job(coordinator.load_schedule)
         await coordinator.async_refresh()
-        _LOGGER.info("Schedule reloaded from %s", SCHEDULE_FILENAME)
+        _LOGGER.info(
+            "Schedule reloaded from %s", coordinator.schedule_file
+        )
 
     hass.services.async_register(
-        DOMAIN, "fetch_updates", handle_manual_refresh
+        DOMAIN, "fetch_updates", handle_fetch_updates
     )
     hass.services.async_register(
         DOMAIN, "reload_schedule", handle_reload_schedule
@@ -630,9 +477,13 @@ async def async_setup_entry(
 class DSBRawSensor(CoordinatorEntity, SensorEntity):
     """All raw DSB substitution data."""
 
-    def __init__(self, coordinator: DSBCoordinator) -> None:
+    def __init__(
+        self,
+        coordinator: DSBCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = "dsb_api_raw"
+        self._attr_unique_id = f"{config_entry.entry_id}_raw"
         self._attr_name = "DSB API Raw"
         self._attr_icon = "mdi:calendar-text"
 
@@ -661,21 +512,10 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
 class DSBStudentSensor(CoordinatorEntity, SensorEntity):
     """Per-student sensor with date-keyed merged schedules.
 
-    Combines the timetable from SFG_Stundenplan.yaml with
-    DSB substitution data. Each date delivered by DSB
-    becomes a key in the ``days`` attribute.
-
-    Samuel is in group ANT (Frau Antritt) [2] with E1 in
-    rooms 108/109. The exclude rules filter out entries
-    for group YOU, L2, Sw, K, and Ev based on the class
-    schedule [1].
-
     The native_value includes a hash over all raw DSB fields
-    so the state only changes when actual data changes – not
-    on every fetch. This prevents unnecessary calendar syncs [5].
+    so the state only changes when actual data changes.
     """
 
-    # Fields used for computing the data hash
     _HASH_FIELDS = (
         "Klasse(n)",
         "Stunde",
@@ -688,10 +528,20 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         "Text",
     )
 
-    def __init__(self, coordinator: DSBCoordinator) -> None:
+    def __init__(
+        self,
+        coordinator: DSBCoordinator,
+        config_entry: ConfigEntry,
+    ) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = "sfg_dsb_vertretungsplan"
-        self._attr_name = "SFG DSB Vertretungsplan"
+        # Use student name + class for unique & friendly naming
+        meta = coordinator.schedule.get("meta", {})
+        schueler = meta.get("schueler", "DSB")
+        klasse = meta.get("klasse", "")
+        slug = f"{schueler}_{klasse}".lower().replace(" ", "_")
+
+        self._attr_unique_id = f"{config_entry.entry_id}_{slug}"
+        self._attr_name = f"DSB {schueler} {klasse} Vertretungsplan"
         self._attr_icon = "mdi:school"
 
     # ── internals ──
@@ -722,11 +572,11 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
                     all_dates.add(date_str)
 
         days: Dict[str, Any] = {}
-
         for date_str in sorted(all_dates):
             wochentag = _date_to_wochentag(date_str)
-            schedule_day = self.coordinator.stundenplan.get(wochentag, {})
-
+            schedule_day = self.coordinator.stundenplan.get(
+                wochentag, {}
+            )
             if not schedule_day:
                 continue
 
@@ -757,18 +607,9 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         return days
 
     def _compute_data_hash(self) -> str:
-        """Compute a hash over all relevant raw DSB fields for this student.
-
-        Uses all raw DSB entry fields:
-        Klasse(n), Stunde, Vertreter, Fach, Raum, (Lehrer), (Le.) nach, Art, Text
-
-        The hash only changes when the actual substitution data changes,
-        not when last_updated or other metadata changes. This prevents
-        the calendar sync automation from triggering unnecessarily [5].
-        """
+        """Compute a hash over all relevant raw DSB fields."""
         filtered_by_date = self._get_filtered_by_date()
 
-        # Build a list of all relevant entry data for hashing
         hash_entries = []
         for date_str in sorted(filtered_by_date.keys()):
             for entry in filtered_by_date[date_str]:
@@ -777,9 +618,6 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
                     hash_entry[field] = str(entry.get(field, ""))
                 hash_entries.append(hash_entry)
 
-        # Also include all dates DSB provides (even without entries
-        # for this student) so we detect date shifts (e.g. DSB
-        # switches from today/tomorrow to tomorrow/day-after)
         all_dates: Set[str] = set()
         if self.coordinator.data:
             for day_data in self.coordinator.data.get("days", []):
@@ -795,15 +633,18 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             sort_keys=True,
             ensure_ascii=False,
         )
-
-        return hashlib.md5(hash_input.encode("utf-8")).hexdigest()[:8]
+        return hashlib.md5(
+            hash_input.encode("utf-8")
+        ).hexdigest()[:8]
 
     # ── sensor properties ──
 
     @property
     def native_value(self) -> str:
         days = self._build_days()
-        total = sum(d.get("change_count", 0) for d in days.values())
+        total = sum(
+            d.get("change_count", 0) for d in days.values()
+        )
         data_hash = self._compute_data_hash()
         return f"{total}|{data_hash}"
 
@@ -815,9 +656,10 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             "dates": sorted(days.keys()),
             "schedule_raw": self.coordinator.stundenplan,
             "klasse": self.coordinator.klasse,
-            "schueler": self.coordinator.schedule.get("meta", {}).get(
-                "schueler", ""
-            ),
+            "schueler": self.coordinator.schedule.get(
+                "meta", {}
+            ).get("schueler", ""),
+            "schedule_file": self.coordinator.schedule_file,
             "last_updated": (
                 self.coordinator.data.get("last_updated")
                 if self.coordinator.data

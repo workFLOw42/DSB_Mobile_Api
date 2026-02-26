@@ -1,3 +1,7 @@
 fetch_updates:
   name: "DSB Plan manuell laden"
-  description: "Erzwingt eine sofortige Aktualisierung der Vertretungspläne, umgeht die Minuten-Sperre und ignoriert am Wochenende den Ferien-Check."
+  description: "Erzwingt eine sofortige Aktualisierung der Vertretungspläne von der DSB API."
+
+reload_schedule:
+  name: "Stundenplan neu laden"
+  description: "Lädt die SFG_Stundenplan.yaml neu, ohne Home Assistant neu zu starten."
