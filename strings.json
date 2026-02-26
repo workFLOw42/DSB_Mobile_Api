@@ -1,18 +1,41 @@
 {
-    "config": {
-        "step": {
-            "user": {
-                "title": "DSB Mobile Login",
-                "data": {
-                    "username": "Username (School ID)",
-                    "password": "Password"
-                }
-            }
-        },
-        "error": {
-            "invalid_auth": "Invalid credentials",
-            "cannot_connect": "Cannot connect to DSB API",
-            "unknown": "Unknown error"
+  "config": {
+    "step": {
+      "user": {
+        "title": "DSB Mobile Login",
+        "description": "Enter your DSB Mobile credentials.",
+        "data": {
+          "username": "Username (School ID)",
+          "password": "Password"
         }
+      },
+      "schedule": {
+        "title": "Timetable (optional)",
+        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Leave empty to use only the raw sensor without student-specific merging.",
+        "data": {
+          "schedule_file": "Schedule filename (e.g. stundenplan.yaml)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials",
+      "cannot_connect": "Cannot connect to DSB API",
+      "unknown": "Unknown error",
+      "file_not_found": "File not found in config directory"
     }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DSB API Settings",
+        "description": "Change the timetable file. Leave empty to disable student-specific sensor. File must be in {config_dir}.",
+        "data": {
+          "schedule_file": "Schedule filename"
+        }
+      }
+    },
+    "error": {
+      "file_not_found": "File not found in config directory"
+    }
+  }
 }

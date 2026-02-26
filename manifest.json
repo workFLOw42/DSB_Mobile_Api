@@ -1,11 +1,12 @@
 {
-    "domain": "dsb_api",
-    "name": "DSB API",
-    "version": "1.0.0",
-    "documentation": "https://github.com/your-repo/dsb_api",
-    "dependencies": [],
-    "codeowners": [],
-    "requirements": ["beautifulsoup4>=4.9.0", "requests>=2.25.0"],
-    "iot_class": "cloud_polling",
-    "config_flow": true
+  "domain": "dsb_api",
+  "name": "DSB Mobile API",
+  "version": "2.0.0",
+  "documentation": "https://github.com/workFLOw42/DSB_Mobile_Api",
+  "issue_tracker": "https://github.com/workFLOw42/DSB_Mobile_Api/issues",
+  "dependencies": [],
+  "codeowners": ["@workFLOw42"],
+  "requirements": ["beautifulsoup4>=4.9.0", "requests>=2.25.0"],
+  "iot_class": "cloud_polling",
+  "config_flow": true
 }
