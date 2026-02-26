@@ -350,8 +350,12 @@ class DSBCoordinator(DataUpdateCoordinator):
 
             all_entries: List[Dict[str, Any]] = []
             all_days: List[Dict[str, Any]] = []
+            all_raw_tables: List[Dict[str, Any]] = []
 
             for plan in plans:
+                # Collect raw table data (completely unfiltered)
+                all_raw_tables.extend(plan.raw_tables)
+
                 for day in plan.days:
                     day_entries: List[Dict[str, Any]] = []
                     for entry in day.entries:
@@ -375,6 +379,7 @@ class DSBCoordinator(DataUpdateCoordinator):
                         }
                     )
 
+            # Deduplicate parsed entries (for student sensor)
             all_entries = _deduplicate_entries(all_entries)
             for day_data in all_days:
                 day_data["entries"] = _deduplicate_entries(
@@ -387,6 +392,8 @@ class DSBCoordinator(DataUpdateCoordinator):
                 "days": all_days,
                 "count": len(all_entries),
                 "day_count": len(all_days),
+                "raw_tables": all_raw_tables,
+                "raw_table_count": len(all_raw_tables),
                 "last_updated": now.isoformat(),
             }
 
@@ -470,12 +477,12 @@ async def async_setup_entry(
 
 
 # ──────────────────────────────────────────────
-#  Sensor 1: Raw (all classes, all days)
+#  Sensor 1: Raw (all classes, all days, unfiltered)
 # ──────────────────────────────────────────────
 
 
 class DSBRawSensor(CoordinatorEntity, SensorEntity):
-    """All raw DSB substitution data."""
+    """All raw DSB substitution data – completely unfiltered."""
 
     def __init__(
         self,
@@ -498,9 +505,19 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return {}
         return {
+            # Parsed & deduplicated entries (structured)
             "entries": self.coordinator.data.get("entries", []),
             "days": self.coordinator.data.get("days", []),
-            "last_updated": self.coordinator.data.get("last_updated"),
+            # Completely unfiltered raw table data
+            "raw_tables": self.coordinator.data.get(
+                "raw_tables", []
+            ),
+            "raw_table_count": self.coordinator.data.get(
+                "raw_table_count", 0
+            ),
+            "last_updated": self.coordinator.data.get(
+                "last_updated"
+            ),
         }
 
 
@@ -607,7 +624,11 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         return days
 
     def _compute_data_hash(self) -> str:
-        """Compute a hash over all relevant raw DSB fields."""
+        """Compute a hash over all relevant raw DSB fields.
+
+        Only changes when actual substitution data changes,
+        not on metadata like last_updated.
+        """
         filtered_by_date = self._get_filtered_by_date()
 
         hash_entries = []
