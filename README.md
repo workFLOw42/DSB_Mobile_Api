@@ -1,12 +1,37 @@
-# DSB Mobile API – Home Assistant Integration
+# 📋 DSB Mobile API – Home Assistant Integration
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/hacs/integration)
-[![Validate](https://github.com/workFLOw42/DSB_Mobile_Api/actions/workflows/validate.yml/badge.svg)](https://github.com/workFLOw42/DSB_Mobile_Api/actions/workflows/validate.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+<p align="center">
+  <img src="https://raw.githubusercontent.com/workFLOw42/DSB_Mobile_Api/main/images/logo-hires.png" alt="DSB Mobile API" width="256">
+</p>
 
-Custom Home Assistant integration for [DSB Mobile](https://www.dsbmobile.de/) – the German school substitution plan system used by many schools in Germany.
+<p align="center">
+  <a href="https://github.com/workFLOw42/DSB_Mobile_Api/actions/workflows/validate.yml">
+    <img src="https://github.com/workFLOw42/DSB_Mobile_Api/actions/workflows/validate.yml/badge.svg" alt="Validate Integration">
+  </a>
+  <a href="https://github.com/hacs/integration">
+    <img src="https://img.shields.io/badge/HACS-Custom-41BDF5.svg" alt="HACS Custom">
+  </a>
+  <a href="https://github.com/workFLOw42/DSB_Mobile_Api/releases">
+    <img src="https://img.shields.io/github/v/release/workFLOw42/DSB_Mobile_Api" alt="GitHub Release">
+  </a>
+  <a href="https://github.com/workFLOw42/DSB_Mobile_Api/releases">
+    <img src="https://img.shields.io/github/downloads/workFLOw42/DSB_Mobile_Api/total?label=Downloads&color=blue" alt="Downloads">
+  </a>
+  <a href="https://github.com/workFLOw42/DSB_Mobile_Api">
+    <img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fanalytics.home-assistant.io%2Fcustom_integrations.json&query=%24.dsb_api.total&label=HACS%20Installs&color=41BDF5" alt="HACS Installs">
+  </a>
+  <a href="https://github.com/workFLOw42/DSB_Mobile_Api/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT">
+  </a>
+</p>
 
-## Features
+<p align="center">
+  Custom Home Assistant integration for <a href="https://www.dsbmobile.de/">DSB Mobile</a> – the German school substitution plan system used by many schools in Germany.
+</p>
+
+---
+
+## ✨ Features
 
 - 📋 **Schulinfo Sensor** – Daily school announcements, timestamps, and affected classes
 - 🎒 **Student Sensor** – Per-student merged schedule combining your timetable with DSB data
@@ -17,7 +42,9 @@ Custom Home Assistant integration for [DSB Mobile](https://www.dsbmobile.de/) �
 - 🧑‍🎓 **Multi-student capable** – Each student gets their own timetable YAML and sensor
 - 🐛 **Optional Raw Sensor** – Enable via checkbox for debugging, disable when not needed
 
-## How It Works
+---
+
+## 🔧 How It Works
 
 ```
 DSB Mobile API
@@ -32,33 +59,32 @@ DSB Mobile API
     └──► Raw Sensor (optional, all classes, for debugging)
 ```
 
-The integration fetches substitution data from DSB Mobile and provides it as
-Home Assistant sensors. When combined with a timetable YAML file, it creates
-a student-specific sensor that merges the regular schedule with substitution
-data – showing cancellations, room changes, and substitute teachers.
+The integration fetches substitution data from DSB Mobile and provides it as Home Assistant sensors. When combined with a timetable YAML file, it creates a student-specific sensor that merges the regular schedule with substitution data – showing cancellations, room changes, and substitute teachers.
 
-**Important**: This integration does **not** poll automatically. You control
-when data is fetched via Home Assistant automations calling `dsb_api.fetch_updates`.
+> **Important**: This integration does **not** poll automatically. You control when data is fetched via Home Assistant automations calling `dsb_api.fetch_updates`.
 
-## Installation
+---
+
+## 📦 Installation
 
 ### HACS (recommended)
 
-1. Open HACS → Integrations → ⋮ → **Custom repositories**
+1. **HACS** → Integrationen → ⋮ → **Custom repositories**
 2. Add `https://github.com/workFLOw42/DSB_Mobile_Api` as **Integration**
 3. Search for **"DSB Mobile API"** and install
 4. Restart Home Assistant
-5. Go to Settings → Integrations → **Add Integration** → search "DSB API"
+5. Go to **Settings** → **Integrations** → **Add Integration** → search **"DSB API"**
 6. Enter your DSB Mobile credentials (school ID + password)
 7. Optionally enter your timetable YAML filename
 8. Optionally enable the Raw Debug Sensor
 
 ### Manual
 
-Copy `custom_components/dsb_api/` to your Home Assistant
-`config/custom_components/` directory and restart.
+Copy `custom_components/dsb_api/` to your Home Assistant `config/custom_components/` directory and restart.
 
-## Setup
+---
+
+## ⚙️ Setup
 
 ### Step 1: DSB Credentials
 
@@ -71,21 +97,23 @@ Enter the username (school ID) and password you use for the DSB Mobile app.
 | Schedule filename | No | Your timetable YAML file (e.g. `stundenplan_max.yaml`) |
 | Enable Raw Debug Sensor | No | Enables the raw sensor with all classes (for debugging) |
 
-> 💡 **Tip**: You can change both settings anytime via
-> Settings → Integrations → DSB API → **Configure**
+> 💡 **Tip**: You can change both settings anytime via Settings → Integrations → DSB API → **Configure**
 
-## Sensors
+---
+
+## 📊 Sensors
 
 ### Schulinfo Sensor (always active)
 
 | | |
 |---|---|
-| Entity | `sensor.dsb_schulinfo` |
-| State | Number of days with info |
-| Unit | Tage |
-| Icon | `mdi:bulletin-board` |
+| **Entity** | `sensor.dsb_schulinfo` |
+| **State** | Number of days with info |
+| **Unit** | Tage |
+| **Icon** | `mdi:bulletin-board` |
 
-**Attributes:**
+<details>
+<summary><strong>Attributes</strong></summary>
 
 ```yaml
 tage:
@@ -104,21 +132,22 @@ tage:
     title: "16.3.2025 Dienstag"
     nachrichten: []
     stand: "15.03.2025 07:45"
-    ...
 dates:
   - "2025-03-15"
   - "2025-03-16"
 last_updated: "2025-03-15T07:45:12"
 ```
 
+</details>
+
 ### Student Sensor (when timetable configured)
 
 | | |
 |---|---|
-| Entity | `sensor.dsb_{schueler}_{klasse}_vertretungsplan` |
-| State | `{change_count}\|{data_hash}` |
-| Unit | Änderungen |
-| Icon | `mdi:school` |
+| **Entity** | `sensor.dsb_{schueler}_{klasse}_vertretungsplan` |
+| **State** | `{change_count}\|{data_hash}` |
+| **Unit** | Änderungen |
+| **Icon** | `mdi:school` |
 
 The sensor name is auto-generated from `meta.schueler` and `meta.klasse` in your YAML.
 
@@ -131,10 +160,10 @@ The sensor name is auto-generated from `meta.schueler` and `meta.klasse` in your
 └──── Total substitution changes across all days
 ```
 
-This design ensures automations only trigger when **actual data changes** –
-not when data is re-fetched but identical.
+This design ensures automations only trigger when **actual data changes** – not when data is re-fetched but identical.
 
-#### Attributes
+<details>
+<summary><strong>Attributes</strong></summary>
 
 ```yaml
 days:
@@ -172,7 +201,9 @@ schedule_raw: { ... }
 last_updated: "2025-03-15T07:45:12"
 ```
 
-**Possible status values:**
+</details>
+
+#### Status Values
 
 | Status | Meaning | Calendar Icon |
 |---|---|---|
@@ -186,50 +217,46 @@ last_updated: "2025-03-15T07:45:12"
 
 | | |
 |---|---|
-| Entity | `sensor.dsb_api_raw` |
-| State | Total entry count |
-| Icon | `mdi:calendar-text` |
-| Default | **Disabled** – enable in integration settings |
+| **Entity** | `sensor.dsb_api_raw` |
+| **State** | Total entry count |
+| **Icon** | `mdi:calendar-text` |
+| **Default** | **Disabled** – enable in integration settings |
 
-Contains all parsed entries for all classes without filtering.
-Useful for debugging filter rules or checking what DSB delivers.
-Enable via Settings → Integrations → DSB API → Configure → ✅ Enable Raw Debug Sensor.
+Contains all parsed entries for all classes without filtering. Useful for debugging filter rules or checking what DSB delivers.
 
-## Services
+> Enable via Settings → Integrations → DSB API → Configure → ✅ Enable Raw Debug Sensor.
+
+---
+
+## 🛠 Services
 
 | Service | Description |
 |---|---|
 | `dsb_api.fetch_updates` | Force an immediate API fetch |
 | `dsb_api.reload_schedule` | Reload the timetable YAML without restarting HA |
 
-## Timetable YAML
+---
 
-The timetable file describes one student's weekly schedule.
-Place it in your HA config directory (e.g. `/config/stundenplan_max.yaml`).
+## 📅 Timetable YAML
 
-### Structure
+The timetable file describes one student's weekly schedule. Place it in your HA config directory (e.g. `/config/stundenplan_max.yaml`).
+
+<details>
+<summary><strong>Full Example</strong></summary>
 
 ```yaml
-# ─── Student Info ───
 meta:
-  klasse: "6D"           # Class name (must match DSB data exactly!)
-  schueler: "Max"        # Student name (used for sensor naming)
-  gruppe: "GRP1"         # Course group (informational)
+  klasse: "6D"
+  schueler: "Max"
+  gruppe: "GRP1"
 
-# ─── Exclude Rules (optional) ───
-# Filter out subjects/teachers not relevant for this student.
-# Useful when DSB shows entries for the whole class but the student
-# is in a specific course group (e.g. French instead of Latin).
 exclude:
-  - fach: "E1"           # Exclude English...
-    lehrer: "SMI"        # ...only when taught by teacher SMI
-  - fach: "L2"           # Always exclude Latin (student takes French)
-  - fach: "Sw"           # Exclude swimming
-  - fach: "K"            # Exclude Catholic religion
+  - fach: "E1"
+    lehrer: "SMI"
+  - fach: "L2"
+  - fach: "Sw"
+  - fach: "K"
 
-# ─── Weekly Timetable ───
-# Keys: montag, dienstag, mittwoch, donnerstag, freitag
-# Lesson numbers as strings, each with: fach, raum, lehrer, uhrzeit
 stundenplan:
   montag:
     "1": { fach: E1,  raum: "108", lehrer: MUL, uhrzeit: "08:00-08:45" }
@@ -269,6 +296,8 @@ stundenplan:
     "6": { fach: M,   raum: "008", lehrer: SCH, uhrzeit: "12:20-13:05" }
 ```
 
+</details>
+
 ### Field Reference
 
 | Field | Required | Description | Example |
@@ -278,7 +307,7 @@ stundenplan:
 | `meta.gruppe` | ❌ | Course group (informational only) | `"GRP1"` |
 | `exclude[].fach` | ✅ | Subject code to exclude | `"L2"`, `"Sw"` |
 | `exclude[].lehrer` | ❌ | Only exclude for this specific teacher | `"SMI"` |
-| `stundenplan.<day>.<nr>.fach` | ✅ | Subject code (must match DSB) | `"E1"`, `"M"`, `"D"` |
+| `stundenplan.<day>.<nr>.fach` | ✅ | Subject code (must match DSB) | `"E1"`, `"M"` |
 | `stundenplan.<day>.<nr>.raum` | ✅ | Room number | `"108"`, `"SpH"` |
 | `stundenplan.<day>.<nr>.lehrer` | ✅ | Teacher code | `"MUL"`, `"SCH"` |
 | `stundenplan.<day>.<nr>.uhrzeit` | ✅ | Time range `HH:MM-HH:MM` | `"08:00-08:45"` |
@@ -312,15 +341,16 @@ Create separate YAML files and add the integration multiple times:
 /config/stundenplan_anna.yaml    → sensor.dsb_anna_9b_vertretungsplan
 ```
 
-Each instance gets its own DSB credentials (can be the same school)
-and its own schedule file.
+Each instance gets its own DSB credentials (can be the same school) and its own schedule file.
 
-## Fetch Scheduling
+---
 
-This integration does **not** poll automatically. Create a Home Assistant
-automation to call `dsb_api.fetch_updates` at your preferred times.
+## ⏰ Fetch Scheduling
 
-### Simple Example
+This integration does **not** poll automatically. Create a Home Assistant automation to call `dsb_api.fetch_updates` at your preferred times.
+
+<details>
+<summary><strong>Simple Example</strong></summary>
 
 ```yaml
 alias: DSB_Fetch
@@ -348,7 +378,10 @@ actions:
 mode: single
 ```
 
-### Advanced Example (school-day aware)
+</details>
+
+<details>
+<summary><strong>Advanced Example (school-day aware)</strong></summary>
 
 ```yaml
 alias: DSB_Fetch_Schedule
@@ -428,11 +461,16 @@ actions:
 mode: single
 ```
 
-## Calendar Sync Example
+</details>
 
-Combine the student sensor with a calendar sync automation.
-The trigger only fires when the hash changes (= real data change).
-Past days are automatically filtered out.
+---
+
+## 📅 Calendar Sync Example
+
+Combine the student sensor with a calendar sync automation. The trigger only fires when the hash changes (= real data change). Past days are automatically filtered out.
+
+<details>
+<summary><strong>Calendar Sync Automation</strong></summary>
 
 ```yaml
 alias: DSB_Calendar_Sync
@@ -470,30 +508,11 @@ actions:
         # See project Wiki for full Google Calendar example
 ```
 
-## Troubleshooting
+</details>
 
-| Issue | Solution |
-|---|---|
-| Student sensor not created | Check that schedule YAML exists and `meta.klasse` matches DSB data |
-| No changes detected | Verify `meta.klasse` matches exactly (case-sensitive!) |
-| Entries for wrong subjects | Add `exclude` rules for subjects the student doesn't take |
-| Schedule file not found | File must be in `/config/`, filename must match setup |
-| Want to change settings | Settings → Integrations → DSB API → Configure |
-| Raw sensor too large | Raw sensor excludes heavy HTML data by default |
-| Need raw HTML data | Enable Raw sensor, check attributes, disable when done |
-| Sensor state unchanged | Hash only changes on real data changes – working as designed! |
-| Past days in calendar | Use date filter in sync automation (see example above) |
+---
 
-### Enable Debug Logging
-
-```yaml
-logger:
-  default: info
-  logs:
-    custom_components.dsb_api: debug
-```
-
-## Architecture
+## 🏗️ Architecture
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -521,6 +540,74 @@ logger:
 └─────────────────────────────────────────────────────┘
 ```
 
-## License
+---
 
-[MIT](LICENSE)
+## 🔍 Troubleshooting
+
+| Issue | Solution |
+|---|---|
+| Student sensor not created | Check that schedule YAML exists and `meta.klasse` matches DSB data |
+| No changes detected | Verify `meta.klasse` matches exactly (case-sensitive!) |
+| Entries for wrong subjects | Add `exclude` rules for subjects the student doesn't take |
+| Schedule file not found | File must be in `/config/`, filename must match setup |
+| Want to change settings | Settings → Integrations → DSB API → Configure |
+| Raw sensor too large | Raw sensor excludes heavy HTML data by default |
+| Need raw HTML data | Enable Raw sensor, check attributes, disable when done |
+| Sensor state unchanged | Hash only changes on real data changes – working as designed! |
+| Past days in calendar | Use date filter in sync automation (see example above) |
+
+<details>
+<summary><strong>Enable Debug Logging</strong></summary>
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.dsb_api: debug
+```
+
+</details>
+
+---
+
+## ❓ FAQ
+
+<details>
+<summary><strong>Does this integration poll automatically?</strong></summary>
+
+No. You control when data is fetched via Home Assistant automations calling `dsb_api.fetch_updates`. This is by design to avoid unnecessary API calls.
+
+</details>
+
+<details>
+<summary><strong>Can I use this for multiple students?</strong></summary>
+
+Yes! Add the integration multiple times – once per student. Each gets their own timetable YAML, credentials (can be the same school), and sensor.
+
+</details>
+
+<details>
+<summary><strong>Why does the sensor state contain a hash?</strong></summary>
+
+The hash enables efficient change detection. Automations (like calendar sync) only trigger when the hash changes – meaning actual DSB data changed. Re-fetching identical data won't cause unnecessary triggers.
+
+</details>
+
+<details>
+<summary><strong>My school uses a different substitution system. Will this work?</strong></summary>
+
+This integration only works with [DSB Mobile](https://www.dsbmobile.de/). If your school uses a different system (like Untis, WebUntis, etc.), this integration won't work.
+
+</details>
+
+---
+
+## 🐛 Issues & Feature Requests
+
+[Create an issue](https://github.com/workFLOw42/DSB_Mobile_Api/issues)
+
+---
+
+## 📄 License
+
+[MIT](https://github.com/workFLOw42/DSB_Mobile_Api/blob/main/LICENSE) – © 2025 [workFLOw42](https://github.com/workFLOw42)
