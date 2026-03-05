@@ -72,7 +72,7 @@
         },
         "hash_key": {
           "name": "Hash key",
-          "description": "Which hash to set"
+          "description": "Which hash to set (exams, termine, yaml)"
         },
         "hash_value": {
           "name": "Hash value",

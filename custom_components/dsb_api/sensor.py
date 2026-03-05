@@ -40,6 +40,9 @@ WOCHENTAG_MAP = {
     4: "freitag",
 }
 
+# Fields to strip from DSB entries in sensor attributes
+STRIP_FIELDS_DAYS = {"changes"}
+
 
 # ──────────────────────────────────────────────
 #  Helper: Slugify
@@ -58,7 +61,7 @@ def _slugify(text: str) -> str:
 
 
 # ──────────────────────────────────────────────
-#  Helper Functions (unchanged from original)
+#  Helper Functions
 # ──────────────────────────────────────────────
 
 def _load_schedule(hass: HomeAssistant, filename: str) -> Dict[str, Any]:
@@ -284,13 +287,38 @@ def _merge_schedule_with_dsb(
             result["changes"] = dsb_match
             if status == "entfall":
                 result["raum"] = "---"
-            elif status in ("raum_aenderung", "vertretung", "betreuung", "verlegung"):
+            elif status in (
+                "raum_aenderung",
+                "vertretung",
+                "betreuung",
+                "verlegung",
+            ):
                 dsb_raum = str(dsb_match.get("Raum", "---")).strip()
                 if dsb_raum and dsb_raum != "---":
                     result["original_raum"] = plan_info.get("raum", "?")
                     result["raum"] = dsb_raum
         merged[stunde] = result
     return merged
+
+
+def _slim_days(days: Dict[str, Any]) -> Dict[str, Any]:
+    """Strip heavy fields from days to stay under 16KB recorder limit.
+
+    Removes 'changes' (raw DSB match data) from each schedule entry.
+    The relevant fields (status, dsb_text, dsb_art, vertreter) remain.
+    """
+    slim: Dict[str, Any] = {}
+    for date_str, day_data in days.items():
+        slim_schedule = {}
+        for stunde, info in day_data.get("schedule", {}).items():
+            slim_entry = {k: v for k, v in info.items() if k != "changes"}
+            slim_schedule[stunde] = slim_entry
+        slim[date_str] = {
+            "wochentag": day_data.get("wochentag", ""),
+            "schedule": slim_schedule,
+            "change_count": day_data.get("change_count", 0),
+        }
+    return slim
 
 
 # ──────────────────────────────────────────────
@@ -355,7 +383,11 @@ class DSBCoordinator(DataUpdateCoordinator):
 
     @property
     def config_block(self) -> Dict[str, Any]:
-        """Return the full YAML config for automations to consume."""
+        """Return the full YAML config for automations.
+
+        This is NOT stored in sensor attributes (too large).
+        Access via coordinator directly or via dedicated config sensor.
+        """
         schedule = self._schedule_data
         stundenplan = schedule.get("stundenplan", {})
         return {
@@ -368,7 +400,6 @@ class DSBCoordinator(DataUpdateCoordinator):
             "emojis": schedule.get("emojis", {}),
             "kurzstunden": schedule.get("kurzstunden", {}),
             "lehrer_profil": _extract_lehrer_profil(stundenplan),
-            "hashes": self.hash_store.to_dict(),
         }
 
     async def _async_update_data(self) -> Dict[str, Any]:
@@ -378,7 +409,9 @@ class DSBCoordinator(DataUpdateCoordinator):
             await self.hass.async_add_executor_job(self.load_schedule)
         _LOGGER.info("Fetching DSB data at %s", now.strftime("%H:%M:%S"))
         try:
-            plans = await self.hass.async_add_executor_job(self.client.get_plans)
+            plans = await self.hass.async_add_executor_job(
+                self.client.get_plans
+            )
             all_entries: List[Dict[str, Any]] = []
             all_days: List[Dict[str, Any]] = []
             all_raw_tables: List[Dict[str, Any]] = []
@@ -404,7 +437,9 @@ class DSBCoordinator(DataUpdateCoordinator):
                     )
             all_entries = _deduplicate_entries(all_entries)
             for day_data in all_days:
-                day_data["entries"] = _deduplicate_entries(day_data["entries"])
+                day_data["entries"] = _deduplicate_entries(
+                    day_data["entries"]
+                )
                 day_data["count"] = len(day_data["entries"])
             return {
                 "entries": all_entries,
@@ -438,13 +473,13 @@ async def async_setup_entry(
     data = hass.data[DOMAIN][config_entry.entry_id]
     client = data["client"]
     hash_store = data["hash_store"]
+
     schedule_file = config_entry.data.get(CONF_SCHEDULE_FILE, "")
     enable_raw = config_entry.data.get(
         CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
     )
 
     coordinator = DSBCoordinator(hass, client, schedule_file, hash_store)
-
     if schedule_file:
         await hass.async_add_executor_job(coordinator.load_schedule)
     await coordinator.async_config_entry_first_refresh()
@@ -469,7 +504,9 @@ async def async_setup_entry(
     # Student Sensor (if schedule configured)
     if coordinator.schedule:
         entities.append(
-            DSBStudentSensor(coordinator, config_entry, child_name, class_name)
+            DSBStudentSensor(
+                coordinator, config_entry, child_name, class_name
+            )
         )
         _LOGGER.info(
             "Student sensor created for %s (%s) using %s",
@@ -481,6 +518,14 @@ async def async_setup_entry(
         _LOGGER.warning(
             "Schedule file '%s' configured but could not be loaded",
             schedule_file,
+        )
+
+    # Config Sensor (for automations – reads YAML config)
+    if coordinator.schedule:
+        entities.append(
+            DSBConfigSensor(
+                coordinator, config_entry, child_name, class_name
+            )
         )
 
     # Hash Sensor
@@ -509,9 +554,15 @@ async def async_setup_entry(
             await hash_store.async_set(key, value)
             await coordinator.async_refresh()
 
-    hass.services.async_register(DOMAIN, "fetch_updates", handle_fetch_updates)
-    hass.services.async_register(DOMAIN, "reload_schedule", handle_reload_schedule)
-    hass.services.async_register(DOMAIN, "set_hash", handle_set_hash)
+    hass.services.async_register(
+        DOMAIN, "fetch_updates", handle_fetch_updates
+    )
+    hass.services.async_register(
+        DOMAIN, "reload_schedule", handle_reload_schedule
+    )
+    hass.services.async_register(
+        DOMAIN, "set_hash", handle_set_hash
+    )
 
 
 # ──────────────────────────────────────────────
@@ -519,7 +570,7 @@ async def async_setup_entry(
 # ──────────────────────────────────────────────
 
 class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
-    """School info sensor."""
+    """School info sensor – daily announcements and metadata."""
 
     def __init__(
         self,
@@ -530,10 +581,16 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry.entry_id}_schulinfo"
-        slug = _slugify(f"dsb {child_name} schulinfo") if child_name else "dsb_schulinfo"
+        slug = (
+            _slugify(f"dsb {child_name} schulinfo")
+            if child_name
+            else "dsb_schulinfo"
+        )
         self.entity_id = f"sensor.{slug}"
         self._attr_name = (
-            f"DSB {child_name} Schulinfo" if child_name else "DSB Schulinfo"
+            f"DSB {child_name} Schulinfo"
+            if child_name
+            else "DSB Schulinfo"
         )
         self._attr_icon = "mdi:bulletin-board"
 
@@ -549,7 +606,9 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
             info_lines = []
             for info_row in table.get("info", []):
                 line = " ".join(
-                    str(cell).strip() for cell in info_row if str(cell).strip()
+                    str(cell).strip()
+                    for cell in info_row
+                    if str(cell).strip()
                 )
                 if line:
                     info_lines.append(line)
@@ -565,7 +624,6 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
                 "stand": stand,
                 "klassen_betroffen": table.get("class_groups", []),
                 "total_eintraege": table.get("total_rows", 0),
-                "url": table.get("url", ""),
             }
         return info_by_date
 
@@ -592,7 +650,7 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
 
 
 # ──────────────────────────────────────────────
-#  Sensor 2: Raw (optional)
+#  Sensor 2: Raw (optional, for debugging)
 # ──────────────────────────────────────────────
 
 class DSBRawSensor(CoordinatorEntity, SensorEntity):
@@ -607,7 +665,11 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self._attr_unique_id = f"{config_entry.entry_id}_raw"
-        slug = _slugify(f"dsb {child_name} raw") if child_name else "dsb_raw"
+        slug = (
+            _slugify(f"dsb {child_name} raw")
+            if child_name
+            else "dsb_raw"
+        )
         self.entity_id = f"sensor.{slug}"
         self._attr_name = (
             f"DSB {child_name} Raw" if child_name else "DSB API Raw"
@@ -627,12 +689,10 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
         for table in raw_tables:
             slim.append(
                 {
-                    "url": table.get("url"),
                     "date": table.get("date"),
                     "title": table.get("title"),
                     "info": table.get("info", []),
-                    "mon_heads": table.get("mon_heads", []),
-                    "headers": table.get("headers", []),
+                    "stand": "",
                     "class_groups": table.get("class_groups", []),
                     "total_rows": table.get("total_rows", 0),
                 }
@@ -644,11 +704,11 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
         if not self.coordinator.data:
             return {}
         return {
-            "entries": self.coordinator.data.get("entries", []),
-            "days": self.coordinator.data.get("days", []),
             "day_count": self.coordinator.data.get("day_count", 0),
             "raw_tables": self._slim_raw_tables(),
-            "raw_table_count": self.coordinator.data.get("raw_table_count", 0),
+            "raw_table_count": self.coordinator.data.get(
+                "raw_table_count", 0
+            ),
             "last_updated": self.coordinator.data.get("last_updated"),
         }
 
@@ -658,11 +718,24 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
 # ──────────────────────────────────────────────
 
 class DSBStudentSensor(CoordinatorEntity, SensorEntity):
-    """Per-student sensor with date-keyed merged schedules."""
+    """Per-student sensor with date-keyed merged schedules.
+
+    Attributes are slimmed to stay under 16KB:
+    - 'changes' raw data removed from schedule entries
+    - 'config' block moved to dedicated DSBConfigSensor
+    - schedule_raw kept (needed by automations)
+    """
 
     _HASH_FIELDS = (
-        "Klasse(n)", "Stunde", "Vertreter", "Fach", "Raum",
-        "(Lehrer)", "(Le.) nach", "Art", "Text",
+        "Klasse(n)",
+        "Stunde",
+        "Vertreter",
+        "Fach",
+        "Raum",
+        "(Lehrer)",
+        "(Le.) nach",
+        "Art",
+        "Text",
     )
 
     def __init__(
@@ -675,13 +748,19 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         super().__init__(coordinator)
         self._child_name = child_name
         self._class_name = class_name
-        slug = _slugify(f"dsb {child_name} {class_name} vertretungsplan")
+        slug = _slugify(
+            f"dsb {child_name} {class_name} vertretungsplan"
+        )
         self._attr_unique_id = f"{config_entry.entry_id}_{slug}"
         self.entity_id = f"sensor.{slug}"
-        self._attr_name = f"DSB {child_name} {class_name} Vertretungsplan"
+        self._attr_name = (
+            f"DSB {child_name} {class_name} Vertretungsplan"
+        )
         self._attr_icon = "mdi:school"
 
-    def _get_filtered_by_date(self) -> Dict[str, List[Dict[str, Any]]]:
+    def _get_filtered_by_date(
+        self,
+    ) -> Dict[str, List[Dict[str, Any]]]:
         if not self.coordinator.data:
             return {}
         all_entries = self.coordinator.data.get("entries", [])
@@ -703,7 +782,9 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         days: Dict[str, Any] = {}
         for date_str in sorted(all_dates):
             wochentag = _date_to_wochentag(date_str)
-            schedule_day = self.coordinator.stundenplan.get(wochentag, {})
+            schedule_day = self.coordinator.stundenplan.get(
+                wochentag, {}
+            )
             if not schedule_day:
                 continue
             dsb_entries = filtered_by_date.get(date_str, [])
@@ -714,7 +795,6 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
                     "status": info["status"],
                     "fach": info["fach"],
                     "raum": info.get("raum", ""),
-                    "original_raum": info.get("original_raum", ""),
                     "vertreter": info.get("vertreter", ""),
                     "text": info.get("dsb_text", ""),
                 }
@@ -761,11 +841,11 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         days = self._build_days()
+        slim = _slim_days(days)
         return {
-            "days": days,
+            "days": slim,
             "dates": sorted(days.keys()),
             "schedule_raw": self.coordinator.stundenplan,
-            "config": self.coordinator.config_block,
             "klasse": self.coordinator.klasse,
             "schueler": self._child_name,
             "schedule_file": self.coordinator.schedule_file,
@@ -782,11 +862,70 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
 
 
 # ──────────────────────────────────────────────
-#  Sensor 4: Hash Sensor (for automations)
+#  Sensor 4: Config (YAML config for automations)
+# ──────────────────────────────────────────────
+
+class DSBConfigSensor(CoordinatorEntity, SensorEntity):
+    """Exposes YAML config for automations to consume.
+
+    Separated from StudentSensor to keep both under 16KB.
+    Contains: meta, zeitraum, ogts, termine_filter, emojis,
+    lehrer_profil, sensoren, exclude.
+    Does NOT contain: stundenplan (that's in schedule_raw on StudentSensor).
+    """
+
+    def __init__(
+        self,
+        coordinator: DSBCoordinator,
+        config_entry: ConfigEntry,
+        child_name: str,
+        class_name: str,
+    ) -> None:
+        super().__init__(coordinator)
+        slug = _slugify(f"dsb {child_name} config")
+        self._attr_unique_id = f"{config_entry.entry_id}_config"
+        self.entity_id = f"sensor.{slug}"
+        self._attr_name = f"DSB {child_name} Config"
+        self._attr_icon = "mdi:cog"
+
+    @property
+    def native_value(self) -> str:
+        """Hash of config – changes when YAML is reloaded."""
+        cfg = self.coordinator.config_block
+        cfg_json = json.dumps(cfg, sort_keys=True, ensure_ascii=False)
+        return hashlib.md5(cfg_json.encode("utf-8")).hexdigest()[:8]
+
+    @property
+    def extra_state_attributes(self) -> Dict[str, Any]:
+        cfg = self.coordinator.config_block
+        return {
+            "meta": cfg.get("meta", {}),
+            "zeitraum": cfg.get("zeitraum", {}),
+            "sensoren": cfg.get("sensoren", {}),
+            "ogts": cfg.get("ogts", {}),
+            "termine_filter": cfg.get("termine_filter", {}),
+            "emojis": cfg.get("emojis", {}),
+            "lehrer_profil": cfg.get("lehrer_profil", []),
+            "exclude": cfg.get("exclude", []),
+            "kurzstunden": cfg.get("kurzstunden", {}),
+            "last_updated": (
+                self.coordinator.data.get("last_updated")
+                if self.coordinator.data
+                else None
+            ),
+        }
+
+
+# ──────────────────────────────────────────────
+#  Sensor 5: Hash Sensor (for automations)
 # ──────────────────────────────────────────────
 
 class DSBHashSensor(CoordinatorEntity, SensorEntity):
-    """Exposes stored hashes for automation triggers."""
+    """Exposes stored hashes for automation triggers.
+
+    Lightweight – only hash key/value pairs, no heavy data.
+    State changes when any hash changes (triggers Delta Sync).
+    """
 
     def __init__(
         self,
@@ -805,9 +944,10 @@ class DSBHashSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Composite hash of all stored values – triggers automations on change."""
+        """Composite hash – triggers automations on change."""
         all_hashes = "|".join(
-            f"{k}={v}" for k, v in sorted(self._store.to_dict().items())
+            f"{k}={v}"
+            for k, v in sorted(self._store.to_dict().items())
         )
         if all_hashes:
             return hashlib.md5(all_hashes.encode()).hexdigest()[:8]
@@ -816,7 +956,9 @@ class DSBHashSensor(CoordinatorEntity, SensorEntity):
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
         return {
-            **self._store.to_dict(),
+            "exams": self._store.get("exams"),
+            "termine": self._store.get("termine"),
+            "yaml": self._store.get("yaml"),
             "last_updated": (
                 self.coordinator.data.get("last_updated")
                 if self.coordinator.data
