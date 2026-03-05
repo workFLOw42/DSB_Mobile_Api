@@ -19,7 +19,7 @@
       },
       "schedule": {
         "title": "Schedule Settings",
-        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Default: {child_name}_Stundenplan.yaml. Leave empty to use only the raw sensor.",
+        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Default: {child_name}_Stundenplan.yaml",
         "data": {
           "schedule_file": "Schedule filename",
           "enable_raw_sensor": "Enable Raw Debug Sensor (all classes, large data)"
@@ -31,6 +31,9 @@
       "cannot_connect": "Cannot connect to DSB API",
       "unknown": "Unknown error",
       "file_not_found": "File not found in config directory"
+    },
+    "abort": {
+      "already_configured": "Already configured"
     }
   },
   "options": {
@@ -53,31 +56,27 @@
   "services": {
     "fetch_updates": {
       "name": "Fetch updates",
-      "description": "Force an immediate fetch from DSB API."
+      "description": "Force an immediate update from DSB API."
     },
     "reload_schedule": {
       "name": "Reload schedule",
-      "description": "Reload the YAML timetable file without restarting HA."
+      "description": "Reload the timetable YAML file without restarting Home Assistant."
     },
     "set_hash": {
       "name": "Set hash",
-      "description": "Store a hash value for automation change detection.",
+      "description": "Set a hash value for delta sync detection.",
       "fields": {
+        "child_name": {
+          "name": "Child name",
+          "description": "Short name of the child (e.g. SFG)"
+        },
         "hash_key": {
-          "name": "Key",
-          "description": "Hash key (e.g. exams, termine, yaml)",
-          "example": "exams",
-          "selector": {
-            "text": {}
-          }
+          "name": "Hash key",
+          "description": "Which hash to set"
         },
         "hash_value": {
-          "name": "Value",
-          "description": "Hash value to store",
-          "example": "a3f8c2d1",
-          "selector": {
-            "text": {}
-          }
+          "name": "Hash value",
+          "description": "The hash value to store"
         }
       }
     }
