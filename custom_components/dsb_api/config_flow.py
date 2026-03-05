@@ -9,6 +9,8 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     DOMAIN,
+    CONF_CHILD_NAME,
+    CONF_CLASS_NAME,
     CONF_SCHEDULE_FILE,
     CONF_ENABLE_RAW_SENSOR,
     DEFAULT_SCHEDULE_FILE,
@@ -22,10 +24,14 @@ _LOGGER = logging.getLogger(__name__)
 class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flow for DSB API."""
 
-    VERSION = 2
+    VERSION = 3
+
+    def __init__(self) -> None:
+        """Initialize."""
+        self._user_data: dict = {}
 
     async def async_step_user(self, user_input=None) -> FlowResult:
-        """Handle the initial step – credentials."""
+        """Step 1: Credentials."""
         errors = {}
 
         if user_input is not None:
@@ -39,7 +45,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 if valid:
                     self._user_data = user_input
-                    return await self.async_step_schedule()
+                    return await self.async_step_child()
                 else:
                     errors["base"] = "invalid_auth"
             except DSBError:
@@ -59,14 +65,36 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_child(self, user_input=None) -> FlowResult:
+        """Step 2: Child name + class for sensor naming."""
+        if user_input is not None:
+            child_name = user_input.get(CONF_CHILD_NAME, "").strip()
+            class_name = user_input.get(CONF_CLASS_NAME, "").strip()
+            self._user_data[CONF_CHILD_NAME] = child_name
+            self._user_data[CONF_CLASS_NAME] = class_name
+            return await self.async_step_schedule()
+
+        return self.async_show_form(
+            step_id="child",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_CHILD_NAME): str,
+                    vol.Required(CONF_CLASS_NAME): str,
+                }
+            ),
+        )
+
     async def async_step_schedule(self, user_input=None) -> FlowResult:
-        """Handle the schedule file + options step."""
+        """Step 3: Schedule file + options."""
         errors = {}
 
+        child_name = self._user_data.get(CONF_CHILD_NAME, "")
+        default_file = (
+            f"{child_name}_Stundenplan.yaml" if child_name else DEFAULT_SCHEDULE_FILE
+        )
+
         if user_input is not None:
-            schedule_file = user_input.get(
-                CONF_SCHEDULE_FILE, ""
-            ).strip()
+            schedule_file = user_input.get(CONF_SCHEDULE_FILE, "").strip()
             enable_raw = user_input.get(
                 CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
             )
@@ -81,7 +109,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not errors:
                 await self.async_set_unique_id(
-                    self._user_data["username"]
+                    f"{self._user_data['username']}_{child_name}"
                 )
                 self._abort_if_unique_id_configured()
 
@@ -91,14 +119,10 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_ENABLE_RAW_SENSOR: enable_raw,
                 }
 
-                title = f"DSB ({self._user_data['username']})"
-                if schedule_file:
-                    title += f" – {schedule_file}"
+                class_name = self._user_data.get(CONF_CLASS_NAME, "")
+                title = f"DSB ({child_name} {class_name})"
 
-                return self.async_create_entry(
-                    title=title,
-                    data=data,
-                )
+                return self.async_create_entry(title=title, data=data)
 
         return self.async_show_form(
             step_id="schedule",
@@ -106,7 +130,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Optional(
                         CONF_SCHEDULE_FILE,
-                        default=DEFAULT_SCHEDULE_FILE,
+                        default=default_file,
                     ): str,
                     vol.Optional(
                         CONF_ENABLE_RAW_SENSOR,
@@ -116,6 +140,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ),
             description_placeholders={
                 "config_dir": self.hass.config.path(""),
+                "child_name": child_name,
             },
             errors=errors,
         )
@@ -123,25 +148,28 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     def async_get_options_flow(config_entry):
         """Options flow to change settings later."""
-        return DSBOptionsFlow(config_entry)
+        return DSBOptionsFlow()
 
 
 class DSBOptionsFlow(config_entries.OptionsFlow):
     """Handle options for DSB API."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self._config_entry = config_entry
 
     async def async_step_init(self, user_input=None) -> FlowResult:
         """Manage the options."""
         errors = {}
 
         if user_input is not None:
-            schedule_file = user_input.get(
-                CONF_SCHEDULE_FILE, ""
-            ).strip()
+            schedule_file = user_input.get(CONF_SCHEDULE_FILE, "").strip()
             enable_raw = user_input.get(
                 CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+            )
+            child_name = user_input.get(
+                CONF_CHILD_NAME,
+                self.config_entry.data.get(CONF_CHILD_NAME, ""),
+            )
+            class_name = user_input.get(
+                CONF_CLASS_NAME,
+                self.config_entry.data.get(CONF_CLASS_NAME, ""),
             )
 
             if schedule_file:
@@ -154,33 +182,33 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
 
             if not errors:
                 new_data = {
-                    **self._config_entry.data,
+                    **self.config_entry.data,
                     CONF_SCHEDULE_FILE: schedule_file,
                     CONF_ENABLE_RAW_SENSOR: enable_raw,
+                    CONF_CHILD_NAME: child_name,
+                    CONF_CLASS_NAME: class_name,
                 }
                 self.hass.config_entries.async_update_entry(
-                    self._config_entry, data=new_data
+                    self.config_entry, data=new_data
                 )
                 return self.async_create_entry(title="", data={})
 
-        current_file = self._config_entry.data.get(
-            CONF_SCHEDULE_FILE, ""
-        )
-        current_raw = self._config_entry.data.get(
+        current_file = self.config_entry.data.get(CONF_SCHEDULE_FILE, "")
+        current_raw = self.config_entry.data.get(
             CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
         )
+        current_child = self.config_entry.data.get(CONF_CHILD_NAME, "")
+        current_class = self.config_entry.data.get(CONF_CLASS_NAME, "")
 
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Optional(CONF_CHILD_NAME, default=current_child): str,
+                    vol.Optional(CONF_CLASS_NAME, default=current_class): str,
+                    vol.Optional(CONF_SCHEDULE_FILE, default=current_file): str,
                     vol.Optional(
-                        CONF_SCHEDULE_FILE,
-                        default=current_file,
-                    ): str,
-                    vol.Optional(
-                        CONF_ENABLE_RAW_SENSOR,
-                        default=current_raw,
+                        CONF_ENABLE_RAW_SENSOR, default=current_raw
                     ): bool,
                 }
             ),
