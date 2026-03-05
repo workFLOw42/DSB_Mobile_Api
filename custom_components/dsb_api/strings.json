@@ -9,11 +9,19 @@
           "password": "Password"
         }
       },
-      "schedule": {
-        "title": "Settings",
-        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Leave empty to use only the raw sensor.",
+      "child": {
+        "title": "Child / Student",
+        "description": "Enter the child's name/code and class. This determines sensor entity IDs (e.g. 'SFG' + '6D' → sensor.dsb_sfg_6d_vertretungsplan) and the default schedule file name.",
         "data": {
-          "schedule_file": "Schedule filename (e.g. stundenplan.yaml)",
+          "child_name": "Child name / short code",
+          "class_name": "Class (e.g. 6D)"
+        }
+      },
+      "schedule": {
+        "title": "Schedule Settings",
+        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Default: {child_name}_Stundenplan.yaml. Leave empty to use only the raw sensor.",
+        "data": {
+          "schedule_file": "Schedule filename",
           "enable_raw_sensor": "Enable Raw Debug Sensor (all classes, large data)"
         }
       }
@@ -31,6 +39,8 @@
         "title": "DSB API Settings",
         "description": "Change settings. File must be in {config_dir}.",
         "data": {
+          "child_name": "Child name / short code",
+          "class_name": "Class",
           "schedule_file": "Schedule filename",
           "enable_raw_sensor": "Enable Raw Debug Sensor"
         }
@@ -38,6 +48,38 @@
     },
     "error": {
       "file_not_found": "File not found in config directory"
+    }
+  },
+  "services": {
+    "fetch_updates": {
+      "name": "Fetch updates",
+      "description": "Force an immediate fetch from DSB API."
+    },
+    "reload_schedule": {
+      "name": "Reload schedule",
+      "description": "Reload the YAML timetable file without restarting HA."
+    },
+    "set_hash": {
+      "name": "Set hash",
+      "description": "Store a hash value for automation change detection.",
+      "fields": {
+        "hash_key": {
+          "name": "Key",
+          "description": "Hash key (e.g. exams, termine, yaml)",
+          "example": "exams",
+          "selector": {
+            "text": {}
+          }
+        },
+        "hash_value": {
+          "name": "Value",
+          "description": "Hash value to store",
+          "example": "a3f8c2d1",
+          "selector": {
+            "text": {}
+          }
+        }
+      }
     }
   }
 }

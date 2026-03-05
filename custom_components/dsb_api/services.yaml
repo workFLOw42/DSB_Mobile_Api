@@ -4,4 +4,33 @@ fetch_updates:
 
 reload_schedule:
   name: "Stundenplan neu laden"
-  description: "Lädt die SFG_Stundenplan.yaml neu, ohne Home Assistant neu zu starten."
+  description: "Lädt die Stundenplan-YAML neu, ohne Home Assistant neu zu starten."
+
+set_hash:
+  name: "Hash setzen"
+  description: "Setzt einen Hash-Wert für die Änderungserkennung."
+  fields:
+    child_name:
+      name: "Kindname"
+      description: "Kurzname des Kindes (z.B. SFG)"
+      required: true
+      example: "SFG"
+      selector:
+        text:
+    hash_key:
+      name: "Hash-Schlüssel"
+      description: "Welcher Hash gesetzt werden soll"
+      required: true
+      selector:
+        select:
+          options:
+            - "exams"
+            - "termine"
+            - "yaml"
+    hash_value:
+      name: "Hash-Wert"
+      description: "Der zu speichernde Hash-Wert"
+      required: true
+      example: "a3f8c2d1..."
+      selector:
+        text:
