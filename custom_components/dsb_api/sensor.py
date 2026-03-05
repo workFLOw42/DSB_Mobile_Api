@@ -284,8 +284,7 @@ def _merge_schedule_with_dsb(
 ) -> Dict[str, Any]:
     """Merge one day of the timetable with DSB substitution entries.
 
-    Returns a slim dict per stunde WITHOUT the raw 'changes' DSB match
-    to keep attribute size under 16KB.
+    Returns a slim dict per stunde – no raw DSB match data.
     """
     merged: Dict[str, Any] = {}
     for stunde, plan_info in schedule_day.items():
@@ -307,7 +306,9 @@ def _merge_schedule_with_dsb(
             plan_info.get("lehrer", "?"),
         )
         if dsb_match:
-            status = _determine_status(dsb_match, plan_info.get("raum", ""))
+            status = _determine_status(
+                dsb_match, plan_info.get("raum", "")
+            )
             result["status"] = status
             result["dsb_text"] = dsb_match.get("Text", "")
             result["dsb_art"] = dsb_match.get("Art", "")
@@ -356,7 +357,9 @@ class DSBCoordinator(DataUpdateCoordinator):
 
     def load_schedule(self) -> None:
         """Load or reload the schedule YAML."""
-        self._schedule_data = _load_schedule(self.hass, self._schedule_file)
+        self._schedule_data = _load_schedule(
+            self.hass, self._schedule_file
+        )
         self._schedule_loaded = bool(self._schedule_data)
         if self._schedule_loaded:
             meta = self._schedule_data.get("meta", {})
@@ -368,7 +371,8 @@ class DSBCoordinator(DataUpdateCoordinator):
             )
         elif self._schedule_file:
             _LOGGER.warning(
-                "Schedule could not be loaded from %s", self._schedule_file
+                "Schedule could not be loaded from %s",
+                self._schedule_file,
             )
 
     @property
@@ -391,9 +395,8 @@ class DSBCoordinator(DataUpdateCoordinator):
     def config_block(self) -> Dict[str, Any]:
         """Return YAML config for automations.
 
-        Does NOT include stundenplan (that's on StudentSensor.schedule_raw)
-        or hashes (that's on HashSensor).
-        Keeping this lean prevents 16KB overflow.
+        Lean version for sensor attributes – no stundenplan, no hashes,
+        no exclude rules.
         """
         schedule = self._schedule_data
         stundenplan = schedule.get("stundenplan", {})
@@ -410,13 +413,8 @@ class DSBCoordinator(DataUpdateCoordinator):
 
     @property
     def config_block_full(self) -> Dict[str, Any]:
-        """Full config including exclude rules – for direct coordinator access.
-
-        NOT exposed in sensor attributes (too large).
-        Automations that need exclude rules use the StudentSensor's
-        filtered data instead.
-        """
-        cfg = self.config_block
+        """Full config for direct Python access – NOT in sensor attrs."""
+        cfg = dict(self.config_block)
         cfg["exclude"] = self._schedule_data.get("exclude", [])
         cfg["hashes"] = self.hash_store.to_dict()
         return cfg
@@ -444,11 +442,15 @@ class DSBCoordinator(DataUpdateCoordinator):
                             all_entries.append(entry_dict)
                             day_entries.append(entry_dict)
                         except Exception as exc:
-                            _LOGGER.debug("Error converting entry: %s", exc)
+                            _LOGGER.debug(
+                                "Error converting entry: %s", exc
+                            )
                     all_days.append(
                         {
                             "date": (
-                                day.date.isoformat() if day.date else None
+                                day.date.isoformat()
+                                if day.date
+                                else None
                             ),
                             "entries": day_entries,
                             "count": len(day_entries),
@@ -497,7 +499,9 @@ async def async_setup_entry(
         CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
     )
 
-    coordinator = DSBCoordinator(hass, client, schedule_file, hash_store)
+    coordinator = DSBCoordinator(
+        hass, client, schedule_file, hash_store
+    )
 
     if schedule_file:
         await hass.async_add_executor_job(coordinator.load_schedule)
@@ -509,19 +513,23 @@ async def async_setup_entry(
 
     entities: list[SensorEntity] = []
 
-    # 1) Schulinfo Sensor – always created
+    # 1) Schulinfo – always
     entities.append(
-        DSBSchulInfoSensor(coordinator, config_entry, child_name, class_name)
+        DSBSchulInfoSensor(
+            coordinator, config_entry, child_name, class_name
+        )
     )
 
-    # 2) Raw Sensor – optional, for debugging
+    # 2) Raw – optional debug
     if enable_raw:
         entities.append(
-            DSBRawSensor(coordinator, config_entry, child_name, class_name)
+            DSBRawSensor(
+                coordinator, config_entry, child_name, class_name
+            )
         )
         _LOGGER.info("Raw debug sensor enabled")
 
-    # 3) Student Sensor – if schedule YAML loaded
+    # 3) Student – if schedule loaded
     if coordinator.schedule:
         entities.append(
             DSBStudentSensor(
@@ -540,7 +548,7 @@ async def async_setup_entry(
             schedule_file,
         )
 
-    # 4) Config Sensor – if schedule YAML loaded
+    # 4) Config – if schedule loaded
     if coordinator.schedule:
         entities.append(
             DSBConfigSensor(
@@ -548,9 +556,11 @@ async def async_setup_entry(
             )
         )
 
-    # 5) Hash Sensor – always created
+    # 5) Hash – always
     entities.append(
-        DSBHashSensor(coordinator, config_entry, child_name, hash_store)
+        DSBHashSensor(
+            coordinator, config_entry, child_name, hash_store
+        )
     )
 
     async_add_entities(entities)
@@ -567,16 +577,21 @@ async def async_setup_entry(
         """Reload schedule YAML without HA restart."""
         await hass.async_add_executor_job(coordinator.load_schedule)
         await coordinator.async_refresh()
-        _LOGGER.info("Schedule reloaded from %s", coordinator.schedule_file)
+        _LOGGER.info(
+            "Schedule reloaded from %s", coordinator.schedule_file
+        )
 
     async def handle_set_hash(call: ServiceCall) -> None:
         """Set a hash value in the store.
 
         Accepts EITHER:
-          - hash_value: pre-computed hash string (32 chars)
-          - hash_data:  raw data → MD5 computed server-side
+          - hash_data:  raw data → MD5 computed server-side (preferred)
+          - hash_value: pre-computed 32-char MD5 hex string
 
-        This eliminates the need for a Jinja2 'hash' filter.
+        The hash_data path is preferred – it eliminates the need for
+        a Jinja2 'hash' filter and guarantees valid MD5 output.
+        The hash_value path has a safety net: non-MD5 values get
+        auto-hashed by the HashStore.
         """
         key = call.data.get("hash_key", "")
         if not key:
@@ -587,7 +602,7 @@ async def async_setup_entry(
             raw = call.data["hash_data"]
             await hash_store.async_set_from_data(key, raw)
             _LOGGER.info(
-                "set_hash: key=%s (computed from data, %d chars input)",
+                "set_hash: key=%s (computed from %d chars input)",
                 key,
                 len(str(raw)),
             )
@@ -596,7 +611,6 @@ async def async_setup_entry(
             await hash_store.async_set(key, value)
             _LOGGER.info("set_hash: key=%s value=%s", key, value)
 
-        # Refresh so HashSensor picks up the change
         await coordinator.async_refresh()
 
     hass.services.async_register(
@@ -700,11 +714,7 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
 #  Sensor 2: Raw (optional, for debugging)
 # ──────────────────────────────────────────────
 class DSBRawSensor(CoordinatorEntity, SensorEntity):
-    """All raw DSB data – for debugging.
-
-    This sensor is disabled by default and excluded from recorder
-    recommendations since it can be very large.
-    """
+    """All raw DSB data – for debugging. Disabled by default."""
 
     def __init__(
         self,
@@ -722,7 +732,9 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
         )
         self.entity_id = f"sensor.{slug}"
         self._attr_name = (
-            f"DSB {child_name} Raw" if child_name else "DSB API Raw"
+            f"DSB {child_name} Raw"
+            if child_name
+            else "DSB API Raw"
         )
         self._attr_icon = "mdi:calendar-text"
         self._attr_entity_registry_enabled_default = False
@@ -773,11 +785,7 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
 class DSBStudentSensor(CoordinatorEntity, SensorEntity):
     """Per-student sensor with date-keyed merged schedules.
 
-    Attributes are kept slim to stay under 16KB:
-    - No raw 'changes' DSB match data in schedule entries
-    - No config block (that's on DSBConfigSensor)
-    - schedule_raw kept (needed by automations)
-    - Only change_count per day (no changes list)
+    Slim attributes – no raw changes, no config block.
     """
 
     _HASH_FIELDS = (
@@ -842,7 +850,9 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             if not schedule_day:
                 continue
             dsb_entries = filtered_by_date.get(date_str, [])
-            merged = _merge_schedule_with_dsb(schedule_day, dsb_entries)
+            merged = _merge_schedule_with_dsb(
+                schedule_day, dsb_entries
+            )
             change_count = sum(
                 1
                 for info in merged.values()
@@ -876,12 +886,16 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             sort_keys=True,
             ensure_ascii=False,
         )
-        return hashlib.md5(hash_input.encode("utf-8")).hexdigest()[:8]
+        return hashlib.md5(
+            hash_input.encode("utf-8")
+        ).hexdigest()[:8]
 
     @property
     def native_value(self) -> str:
         days = self._build_days()
-        total = sum(d.get("change_count", 0) for d in days.values())
+        total = sum(
+            d.get("change_count", 0) for d in days.values()
+        )
         data_hash = self._compute_data_hash()
         return f"{total}|{data_hash}"
 
@@ -913,17 +927,9 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
 #  Sensor 4: Config (YAML config for automations)
 # ──────────────────────────────────────────────
 class DSBConfigSensor(CoordinatorEntity, SensorEntity):
-    """Exposes YAML config for automations to consume.
+    """Exposes YAML config for automations.
 
-    Separated from StudentSensor to keep both under 16KB.
-
-    Contains: meta, zeitraum, ogts, termine_filter, emojis,
-    lehrer_profil, sensoren, kurzstunden.
-
-    Does NOT contain:
-    - stundenplan (on StudentSensor as schedule_raw)
-    - hashes (on HashSensor)
-    - exclude rules (used internally by StudentSensor filter)
+    Lean – no stundenplan, no hashes, no exclude rules.
     """
 
     def __init__(
@@ -944,8 +950,12 @@ class DSBConfigSensor(CoordinatorEntity, SensorEntity):
     def native_value(self) -> str:
         """Hash of config – changes when YAML is reloaded."""
         cfg = self.coordinator.config_block
-        cfg_json = json.dumps(cfg, sort_keys=True, ensure_ascii=False)
-        return hashlib.md5(cfg_json.encode("utf-8")).hexdigest()[:8]
+        cfg_json = json.dumps(
+            cfg, sort_keys=True, ensure_ascii=False
+        )
+        return hashlib.md5(
+            cfg_json.encode("utf-8")
+        ).hexdigest()[:8]
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
@@ -975,9 +985,11 @@ class DSBConfigSensor(CoordinatorEntity, SensorEntity):
 class DSBHashSensor(CoordinatorEntity, SensorEntity):
     """Exposes stored hashes for automation triggers.
 
-    Minimal attributes – only the 32-char MD5 hex strings.
-    State changes when any hash changes (triggers Delta Sync).
+    Each attribute value is exactly 32 chars (MD5 hex) or empty.
+    Total attribute size: ~200 bytes – well under 16KB.
     """
+
+    _MAX_HASH_DISPLAY_LEN = 32
 
     def __init__(
         self,
@@ -994,6 +1006,23 @@ class DSBHashSensor(CoordinatorEntity, SensorEntity):
         self._attr_name = f"DSB {child_name} Hashes"
         self._attr_icon = "mdi:hashtag"
 
+    def _safe_hash(self, key: str) -> str:
+        """Return stored hash, truncated as safety net."""
+        value = self._store.get(key)
+        if not value:
+            return ""
+        if len(value) > self._MAX_HASH_DISPLAY_LEN:
+            _LOGGER.warning(
+                "Hash '%s' is %d chars (expected %d). "
+                "Delete .storage/dsb_*_hashes.json and re-run "
+                "initial load.",
+                key,
+                len(value),
+                self._MAX_HASH_DISPLAY_LEN,
+            )
+            return value[: self._MAX_HASH_DISPLAY_LEN]
+        return value
+
     @property
     def native_value(self) -> str:
         """Composite hash – triggers automations on change."""
@@ -1007,12 +1036,11 @@ class DSBHashSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Only expose hash key=value pairs. Each value is max 32 chars."""
-        hashes = self._store.to_dict()
+        """Only 3 known keys + last_updated. ~200 bytes total."""
         return {
-            "exams": hashes.get("exams", ""),
-            "termine": hashes.get("termine", ""),
-            "yaml": hashes.get("yaml", ""),
+            "exams": self._safe_hash("exams"),
+            "termine": self._safe_hash("termine"),
+            "yaml": self._safe_hash("yaml"),
             "last_updated": (
                 self.coordinator.data.get("last_updated")
                 if self.coordinator.data
