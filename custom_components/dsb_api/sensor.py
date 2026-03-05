@@ -396,7 +396,7 @@ class DSBCoordinator(DataUpdateCoordinator):
         """Return YAML config for automations.
 
         Lean version for sensor attributes – no stundenplan, no hashes,
-        no exclude rules.
+        no exclude rules. Keeps ConfigSensor under 16KB.
         """
         schedule = self._schedule_data
         stundenplan = schedule.get("stundenplan", {})
@@ -413,7 +413,11 @@ class DSBCoordinator(DataUpdateCoordinator):
 
     @property
     def config_block_full(self) -> Dict[str, Any]:
-        """Full config for direct Python access – NOT in sensor attrs."""
+        """Full config for direct Python access – NOT in sensor attrs.
+
+        Includes exclude rules and hashes. Only used by coordinator
+        internals or future Python-based automations.
+        """
         cfg = dict(self.config_block)
         cfg["exclude"] = self._schedule_data.get("exclude", [])
         cfg["hashes"] = self.hash_store.to_dict()
@@ -590,8 +594,8 @@ async def async_setup_entry(
 
         The hash_data path is preferred – it eliminates the need for
         a Jinja2 'hash' filter and guarantees valid MD5 output.
-        The hash_value path has a safety net: non-MD5 values get
-        auto-hashed by the HashStore.
+        The hash_value path has a safety net in HashStore: non-MD5
+        values get auto-hashed.
         """
         key = call.data.get("hash_key", "")
         if not key:
@@ -611,6 +615,7 @@ async def async_setup_entry(
             await hash_store.async_set(key, value)
             _LOGGER.info("set_hash: key=%s value=%s", key, value)
 
+        # Refresh so HashSensor picks up the change
         await coordinator.async_refresh()
 
     hass.services.async_register(
@@ -785,7 +790,11 @@ class DSBRawSensor(CoordinatorEntity, SensorEntity):
 class DSBStudentSensor(CoordinatorEntity, SensorEntity):
     """Per-student sensor with date-keyed merged schedules.
 
-    Slim attributes – no raw changes, no config block.
+    Slim attributes to stay under 16KB:
+    - No raw 'changes' DSB match data
+    - No config block (on DSBConfigSensor)
+    - No changes list (only change_count)
+    - schedule_raw kept (needed by automations)
     """
 
     _HASH_FIELDS = (
@@ -930,6 +939,7 @@ class DSBConfigSensor(CoordinatorEntity, SensorEntity):
     """Exposes YAML config for automations.
 
     Lean – no stundenplan, no hashes, no exclude rules.
+    Those live on StudentSensor (schedule_raw) and HashSensor.
     """
 
     def __init__(
@@ -1020,7 +1030,7 @@ class DSBHashSensor(CoordinatorEntity, SensorEntity):
                 len(value),
                 self._MAX_HASH_DISPLAY_LEN,
             )
-            return value[: self._MAX_HASH_DISPLAY_LEN]
+            return value[:self._MAX_HASH_DISPLAY_LEN]
         return value
 
     @property
