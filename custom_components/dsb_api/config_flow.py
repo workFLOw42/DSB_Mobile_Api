@@ -66,7 +66,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_child(self, user_input=None) -> FlowResult:
-        """Step 2: Child name + class for sensor naming."""
+        """Step 2: Child name + class."""
         if user_input is not None:
             child_name = user_input.get(CONF_CHILD_NAME, "").strip()
             class_name = user_input.get(CONF_CLASS_NAME, "").strip()
@@ -90,11 +90,15 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         child_name = self._user_data.get(CONF_CHILD_NAME, "")
         default_file = (
-            f"{child_name}_Stundenplan.yaml" if child_name else DEFAULT_SCHEDULE_FILE
+            f"{child_name}_Stundenplan.yaml"
+            if child_name
+            else DEFAULT_SCHEDULE_FILE
         )
 
         if user_input is not None:
-            schedule_file = user_input.get(CONF_SCHEDULE_FILE, "").strip()
+            schedule_file = user_input.get(
+                CONF_SCHEDULE_FILE, ""
+            ).strip()
             enable_raw = user_input.get(
                 CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
             )
@@ -119,10 +123,15 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_ENABLE_RAW_SENSOR: enable_raw,
                 }
 
-                class_name = self._user_data.get(CONF_CLASS_NAME, "")
-                title = f"DSB ({child_name} {class_name})"
+                title = (
+                    f"DSB ({child_name}"
+                    f" {self._user_data.get(CONF_CLASS_NAME, '')})"
+                )
 
-                return self.async_create_entry(title=title, data=data)
+                return self.async_create_entry(
+                    title=title,
+                    data=data,
+                )
 
         return self.async_show_form(
             step_id="schedule",
@@ -147,7 +156,7 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        """Options flow to change settings later."""
+        """Options flow."""
         return DSBOptionsFlow()
 
 
@@ -159,7 +168,9 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
         errors = {}
 
         if user_input is not None:
-            schedule_file = user_input.get(CONF_SCHEDULE_FILE, "").strip()
+            schedule_file = user_input.get(
+                CONF_SCHEDULE_FILE, ""
+            ).strip()
             enable_raw = user_input.get(
                 CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
             )
@@ -193,7 +204,9 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
                 )
                 return self.async_create_entry(title="", data={})
 
-        current_file = self.config_entry.data.get(CONF_SCHEDULE_FILE, "")
+        current_file = self.config_entry.data.get(
+            CONF_SCHEDULE_FILE, ""
+        )
         current_raw = self.config_entry.data.get(
             CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
         )
@@ -204,11 +217,21 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(CONF_CHILD_NAME, default=current_child): str,
-                    vol.Optional(CONF_CLASS_NAME, default=current_class): str,
-                    vol.Optional(CONF_SCHEDULE_FILE, default=current_file): str,
                     vol.Optional(
-                        CONF_ENABLE_RAW_SENSOR, default=current_raw
+                        CONF_CHILD_NAME,
+                        default=current_child,
+                    ): str,
+                    vol.Optional(
+                        CONF_CLASS_NAME,
+                        default=current_class,
+                    ): str,
+                    vol.Optional(
+                        CONF_SCHEDULE_FILE,
+                        default=current_file,
+                    ): str,
+                    vol.Optional(
+                        CONF_ENABLE_RAW_SENSOR,
+                        default=current_raw,
                     ): bool,
                 }
             ),
