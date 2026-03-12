@@ -11,7 +11,7 @@
       },
       "child": {
         "title": "Kind / Schüler",
-        "description": "Geben Sie den Namen/Kürzel und die Klasse des Kindes ein. Dies bestimmt die Sensor-Entity-IDs (z.B. 'SFG' + '6D' → sensor.dsb_sfg_6d_vertretungsplan) und den Standard-Dateinamen für den Stundenplan.",
+        "description": "Geben Sie den Namen/Kürzel und die Klasse des Kindes ein. Dies bestimmt die Sensor-Entity-IDs (z.B. 'MAX' + '6D' → sensor.dsb_max_6d_vertretungsplan) und den Standard-Dateinamen für den Stundenplan.",
         "data": {
           "child_name": "Kindname / Kürzel",
           "class_name": "Klasse (z.B. 6D)"
@@ -68,7 +68,7 @@
       "fields": {
         "child_name": {
           "name": "Kindname",
-          "description": "Kurzname des Kindes (z.B. SFG)"
+          "description": "Kurzname des Kindes (z.B. MAX)"
         },
         "hash_key": {
           "name": "Hash-Schlüssel",

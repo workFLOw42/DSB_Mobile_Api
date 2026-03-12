@@ -11,7 +11,7 @@
       },
       "child": {
         "title": "Child / Student",
-        "description": "Enter the child's name/code and class. This determines sensor entity IDs (e.g. 'SFG' + '6D' → sensor.dsb_sfg_6d_vertretungsplan) and the default schedule file name.",
+        "description": "Enter the child's name/code and class. This determines sensor entity IDs (e.g. 'MAX' + '6D' → sensor.dsb_max_6d_vertretungsplan) and the default schedule file name.",
         "data": {
           "child_name": "Child name / short code",
           "class_name": "Class (e.g. 6D)"
@@ -70,7 +70,7 @@
       "fields": {
         "child_name": {
           "name": "Child name",
-          "description": "Short name of the child (e.g. SFG)"
+          "description": "Short name of the child (e.g. MAX)"
         },
         "hash_key": {
           "name": "Hash key",

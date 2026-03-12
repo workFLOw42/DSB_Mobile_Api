@@ -4,9 +4,9 @@ fetch_updates:
   fields:
     child_name:
       name: "Kindname"
-      description: "Kurzname des Kindes (z.B. SFG). Leer = alle Kinder."
+      description: "Kurzname des Kindes (z.B. MAX). Leer = alle Kinder."
       required: false
-      example: "SFG"
+      example: "MAX"
       selector:
         text:
 
@@ -16,9 +16,9 @@ reload_schedule:
   fields:
     child_name:
       name: "Kindname"
-      description: "Kurzname des Kindes (z.B. SFG). Leer = alle Kinder."
+      description: "Kurzname des Kindes (z.B. MAX). Leer = alle Kinder."
       required: false
-      example: "SFG"
+      example: "MAX"
       selector:
         text:
 
@@ -28,9 +28,9 @@ set_hash:
   fields:
     child_name:
       name: "Kindname"
-      description: "Kurzname des Kindes (z.B. SFG)"
+      description: "Kurzname des Kindes (z.B. MAX)"
       required: true
-      example: "SFG"
+      example: "MAX"
       selector:
         text:
     hash_key:
