@@ -1,10 +1,26 @@
 fetch_updates:
   name: "DSB Plan manuell laden"
   description: "Erzwingt eine sofortige Aktualisierung der Vertretungspläne von der DSB API."
+  fields:
+    child_name:
+      name: "Kindname"
+      description: "Kurzname des Kindes (z.B. SFG). Leer = alle Kinder."
+      required: false
+      example: "SFG"
+      selector:
+        text:
 
 reload_schedule:
   name: "Stundenplan neu laden"
   description: "Lädt die Stundenplan-YAML neu, ohne Home Assistant neu zu starten."
+  fields:
+    child_name:
+      name: "Kindname"
+      description: "Kurzname des Kindes (z.B. SFG). Leer = alle Kinder."
+      required: false
+      example: "SFG"
+      selector:
+        text:
 
 set_hash:
   name: "Hash setzen"

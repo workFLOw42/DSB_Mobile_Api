@@ -28,11 +28,17 @@ class HashStore:
     def __init__(self, hass: HomeAssistant, child_name: str) -> None:
         """Initialize."""
         self._hass = hass
+        self._child_name = child_name
         self._slug = child_name.lower().replace(" ", "_")
         self._path = hass.config.path(
             f".storage/dsb_{self._slug}_hashes.json"
         )
         self._data: Dict[str, str] = {}
+
+    @property
+    def child_name(self) -> str:
+        """Return the child name this store belongs to."""
+        return self._child_name
 
     # ------------------------------------------------------------------
     # Validation

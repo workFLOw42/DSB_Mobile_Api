@@ -11,7 +11,7 @@ import yaml
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import (
     CoordinatorEntity,
@@ -349,6 +349,7 @@ class DSBCoordinator(DataUpdateCoordinator):
         client: DSB,
         schedule_file: str,
         hash_store: HashStore,
+        child_name: str = "",
     ) -> None:
         super().__init__(
             hass, _LOGGER, name="DSB API", update_interval=None
@@ -358,6 +359,11 @@ class DSBCoordinator(DataUpdateCoordinator):
         self._schedule_data: Dict[str, Any] = {}
         self._schedule_loaded = False
         self.hash_store = hash_store
+        self._child_name = child_name
+
+    @property
+    def child_name(self) -> str:
+        return self._child_name
 
     @property
     def schedule_file(self) -> str:
@@ -511,9 +517,13 @@ async def async_setup_entry(
         CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
     )
 
+    child_name_cfg = config_entry.data.get(CONF_CHILD_NAME, "")
     coordinator = DSBCoordinator(
-        hass, client, schedule_file, hash_store
+        hass, client, schedule_file, hash_store, child_name_cfg
     )
+
+    # Store coordinator in hass.data for service handlers
+    hass.data[DOMAIN][config_entry.entry_id]["coordinator"] = coordinator
 
     if schedule_file:
         await hass.async_add_executor_job(coordinator.load_schedule)
@@ -577,64 +587,7 @@ async def async_setup_entry(
 
     async_add_entities(entities)
 
-    # ──────────────────────────────────────────
-    #  Services
-    # ──────────────────────────────────────────
-
-    async def handle_fetch_updates(call: ServiceCall) -> None:
-        """Force an immediate API fetch."""
-        await coordinator.async_refresh()
-
-    async def handle_reload_schedule(call: ServiceCall) -> None:
-        """Reload schedule YAML without HA restart."""
-        await hass.async_add_executor_job(coordinator.load_schedule)
-        await coordinator.async_refresh()
-        _LOGGER.info(
-            "Schedule reloaded from %s", coordinator.schedule_file
-        )
-
-    async def handle_set_hash(call: ServiceCall) -> None:
-        """Set a hash value in the store.
-
-        Accepts EITHER:
-          - hash_data:  raw data → MD5 computed server-side (preferred)
-          - hash_value: pre-computed 32-char MD5 hex string
-
-        The hash_data path is preferred – it eliminates the need for
-        a Jinja2 'hash' filter and guarantees valid MD5 output.
-        The hash_value path has a safety net in HashStore: non-MD5
-        values get auto-hashed.
-        """
-        key = call.data.get("hash_key", "")
-        if not key:
-            _LOGGER.warning("set_hash called without hash_key")
-            return
-
-        if "hash_data" in call.data:
-            raw = call.data["hash_data"]
-            await hash_store.async_set_from_data(key, raw)
-            _LOGGER.info(
-                "set_hash: key=%s (computed from %d chars input)",
-                key,
-                len(str(raw)),
-            )
-        else:
-            value = call.data.get("hash_value", "")
-            await hash_store.async_set(key, value)
-            _LOGGER.info("set_hash: key=%s value=%s", key, value)
-
-        # Refresh so HashSensor picks up the change
-        await coordinator.async_refresh()
-
-    hass.services.async_register(
-        DOMAIN, "fetch_updates", handle_fetch_updates
-    )
-    hass.services.async_register(
-        DOMAIN, "reload_schedule", handle_reload_schedule
-    )
-    hass.services.async_register(
-        DOMAIN, "set_hash", handle_set_hash
-    )
+    # Services are registered in __init__.py at integration level
 
 
 # ──────────────────────────────────────────────
