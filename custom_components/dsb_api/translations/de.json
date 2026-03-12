@@ -1,0 +1,84 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "DSB Mobile Anmeldung",
+        "description": "Geben Sie Ihre DSB Mobile Zugangsdaten ein.",
+        "data": {
+          "username": "Benutzername (Schul-ID)",
+          "password": "Passwort"
+        }
+      },
+      "child": {
+        "title": "Kind / Schüler",
+        "description": "Geben Sie den Namen/Kürzel und die Klasse des Kindes ein. Dies bestimmt die Sensor-Entity-IDs (z.B. 'SFG' + '6D' → sensor.dsb_sfg_6d_vertretungsplan) und den Standard-Dateinamen für den Stundenplan.",
+        "data": {
+          "child_name": "Kindname / Kürzel",
+          "class_name": "Klasse (z.B. 6D)"
+        }
+      },
+      "schedule": {
+        "title": "Stundenplan-Einstellungen",
+        "description": "Optional: YAML-Stundenplandatei im HA-Konfigurationsverzeichnis ({config_dir}). Standard: {child_name}_Stundenplan.yaml",
+        "data": {
+          "schedule_file": "Stundenplan-Dateiname",
+          "enable_raw_sensor": "Raw Debug-Sensor aktivieren (alle Klassen, große Datenmenge)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ungültige Zugangsdaten",
+      "cannot_connect": "Verbindung zur DSB API fehlgeschlagen",
+      "unknown": "Unbekannter Fehler",
+      "file_not_found": "Datei nicht im Konfigurationsverzeichnis gefunden"
+    },
+    "abort": {
+      "already_configured": "Bereits konfiguriert"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DSB API Einstellungen",
+        "description": "Einstellungen ändern. Datei muss in {config_dir} liegen.",
+        "data": {
+          "child_name": "Kindname / Kürzel",
+          "class_name": "Klasse",
+          "schedule_file": "Stundenplan-Dateiname",
+          "enable_raw_sensor": "Raw Debug-Sensor aktivieren"
+        }
+      }
+    },
+    "error": {
+      "file_not_found": "Datei nicht im Konfigurationsverzeichnis gefunden"
+    }
+  },
+  "services": {
+    "fetch_updates": {
+      "name": "Vertretungsplan abrufen",
+      "description": "Erzwingt eine sofortige Aktualisierung der Vertretungspläne von der DSB API."
+    },
+    "reload_schedule": {
+      "name": "Stundenplan neu laden",
+      "description": "Lädt die Stundenplan-YAML neu, ohne Home Assistant neu zu starten."
+    },
+    "set_hash": {
+      "name": "Hash setzen",
+      "description": "Setzt einen Hash-Wert für die Änderungserkennung.",
+      "fields": {
+        "child_name": {
+          "name": "Kindname",
+          "description": "Kurzname des Kindes (z.B. SFG)"
+        },
+        "hash_key": {
+          "name": "Hash-Schlüssel",
+          "description": "Welcher Hash gesetzt werden soll (exams, termine, yaml)"
+        },
+        "hash_value": {
+          "name": "Hash-Wert",
+          "description": "Der zu speichernde Hash-Wert"
+        }
+      }
+    }
+  }
+}

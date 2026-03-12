@@ -1,0 +1,84 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "DSB Mobile Login",
+        "description": "Enter your DSB Mobile credentials.",
+        "data": {
+          "username": "Username (School ID)",
+          "password": "Password"
+        }
+      },
+      "child": {
+        "title": "Child / Student",
+        "description": "Enter the child's name/code and class. This determines sensor entity IDs (e.g. 'SFG' + '6D' → sensor.dsb_sfg_6d_vertretungsplan) and the default schedule file name.",
+        "data": {
+          "child_name": "Child name / short code",
+          "class_name": "Class (e.g. 6D)"
+        }
+      },
+      "schedule": {
+        "title": "Schedule Settings",
+        "description": "Optionally provide a YAML timetable file in your HA config directory ({config_dir}). Default: {child_name}_Stundenplan.yaml",
+        "data": {
+          "schedule_file": "Schedule filename",
+          "enable_raw_sensor": "Enable Raw Debug Sensor (all classes, large data)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid credentials",
+      "cannot_connect": "Cannot connect to DSB API",
+      "unknown": "Unknown error",
+      "file_not_found": "File not found in config directory"
+    },
+    "abort": {
+      "already_configured": "Already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "DSB API Settings",
+        "description": "Change settings. File must be in {config_dir}.",
+        "data": {
+          "child_name": "Child name / short code",
+          "class_name": "Class",
+          "schedule_file": "Schedule filename",
+          "enable_raw_sensor": "Enable Raw Debug Sensor"
+        }
+      }
+    },
+    "error": {
+      "file_not_found": "File not found in config directory"
+    }
+  },
+  "services": {
+    "fetch_updates": {
+      "name": "Fetch updates",
+      "description": "Force an immediate update from DSB API."
+    },
+    "reload_schedule": {
+      "name": "Reload schedule",
+      "description": "Reload the timetable YAML file without restarting Home Assistant."
+    },
+    "set_hash": {
+      "name": "Set hash",
+      "description": "Set a hash value for delta sync detection.",
+      "fields": {
+        "child_name": {
+          "name": "Child name",
+          "description": "Short name of the child (e.g. SFG)"
+        },
+        "hash_key": {
+          "name": "Hash key",
+          "description": "Which hash to set (exams, termine, yaml)"
+        },
+        "hash_value": {
+          "name": "Hash value",
+          "description": "The hash value to store"
+        }
+      }
+    }
+  }
+}
