@@ -192,26 +192,34 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
                     errors[CONF_SCHEDULE_FILE] = "file_not_found"
 
             if not errors:
-                new_data = {
-                    **self.config_entry.data,
-                    CONF_SCHEDULE_FILE: schedule_file,
-                    CONF_ENABLE_RAW_SENSOR: enable_raw,
-                    CONF_CHILD_NAME: child_name,
-                    CONF_CLASS_NAME: class_name,
-                }
-                self.hass.config_entries.async_update_entry(
-                    self.config_entry, data=new_data
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_SCHEDULE_FILE: schedule_file,
+                        CONF_ENABLE_RAW_SENSOR: enable_raw,
+                        CONF_CHILD_NAME: child_name,
+                        CONF_CLASS_NAME: class_name,
+                    },
                 )
-                return self.async_create_entry(title="", data={})
 
-        current_file = self.config_entry.data.get(
-            CONF_SCHEDULE_FILE, ""
+        current_file = self.config_entry.options.get(
+            CONF_SCHEDULE_FILE,
+            self.config_entry.data.get(CONF_SCHEDULE_FILE, ""),
         )
-        current_raw = self.config_entry.data.get(
-            CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+        current_raw = self.config_entry.options.get(
+            CONF_ENABLE_RAW_SENSOR,
+            self.config_entry.data.get(
+                CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+            ),
         )
-        current_child = self.config_entry.data.get(CONF_CHILD_NAME, "")
-        current_class = self.config_entry.data.get(CONF_CLASS_NAME, "")
+        current_child = self.config_entry.options.get(
+            CONF_CHILD_NAME,
+            self.config_entry.data.get(CONF_CHILD_NAME, ""),
+        )
+        current_class = self.config_entry.options.get(
+            CONF_CLASS_NAME,
+            self.config_entry.data.get(CONF_CLASS_NAME, ""),
+        )
 
         return self.async_show_form(
             step_id="init",
