@@ -30,7 +30,8 @@
       "invalid_auth": "Invalid credentials",
       "cannot_connect": "Cannot connect to DSB API",
       "unknown": "Unknown error",
-      "file_not_found": "File not found in config directory"
+      "file_not_found": "File not found in config directory",
+      "invalid_path": "File path must be within the config directory"
     },
     "abort": {
       "already_configured": "Already configured"
@@ -50,7 +51,8 @@
       }
     },
     "error": {
-      "file_not_found": "File not found in config directory"
+      "file_not_found": "File not found in config directory",
+      "invalid_path": "File path must be within the config directory"
     }
   },
   "services": {
