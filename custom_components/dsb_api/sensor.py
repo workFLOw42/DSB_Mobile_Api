@@ -789,8 +789,24 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             f"DSB {child_name} {class_name} Vertretungsplan"
         )
         self._attr_icon = "mdi:school"
+        # Cache to avoid recomputing on every property access
+        self._cached_data_ref: Any = None
+        self._cached_filtered: Dict[str, List[Dict[str, Any]]] = {}
+        self._cached_days: Dict[str, Any] = {}
+        self._cached_hash: str = ""
 
-    def _get_filtered_by_date(
+    def _ensure_cache(self) -> None:
+        """Recompute cached values if coordinator data has changed."""
+        if self.coordinator.data is self._cached_data_ref:
+            return
+        self._cached_data_ref = self.coordinator.data
+        self._cached_filtered = self._compute_filtered_by_date()
+        self._cached_days = self._compute_days(self._cached_filtered)
+        self._cached_hash = self._compute_data_hash(
+            self._cached_filtered
+        )
+
+    def _compute_filtered_by_date(
         self,
     ) -> Dict[str, List[Dict[str, Any]]]:
         if not self.coordinator.data:
@@ -803,8 +819,9 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         )
         return _entries_by_date(filtered)
 
-    def _build_days(self) -> Dict[str, Any]:
-        filtered_by_date = self._get_filtered_by_date()
+    def _compute_days(
+        self, filtered_by_date: Dict[str, List[Dict[str, Any]]]
+    ) -> Dict[str, Any]:
         all_dates: Set[str] = set(filtered_by_date.keys())
         if self.coordinator.data:
             for day_data in self.coordinator.data.get("days", []):
@@ -835,9 +852,10 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             }
         return days
 
-    def _compute_data_hash(self) -> str:
+    def _compute_data_hash(
+        self, filtered_by_date: Dict[str, List[Dict[str, Any]]]
+    ) -> str:
         """Short hash for state change detection."""
-        filtered_by_date = self._get_filtered_by_date()
         hash_entries = []
         for date_str in sorted(filtered_by_date.keys()):
             for entry in filtered_by_date[date_str]:
@@ -862,16 +880,17 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
 
     @property
     def native_value(self) -> str:
-        days = self._build_days()
+        self._ensure_cache()
         total = sum(
-            d.get("change_count", 0) for d in days.values()
+            d.get("change_count", 0)
+            for d in self._cached_days.values()
         )
-        data_hash = self._compute_data_hash()
-        return f"{total}|{data_hash}"
+        return f"{total}|{self._cached_hash}"
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        days = self._build_days()
+        self._ensure_cache()
+        days = self._cached_days
         attrs = {
             "days": days,
             "dates": sorted(days.keys()),
