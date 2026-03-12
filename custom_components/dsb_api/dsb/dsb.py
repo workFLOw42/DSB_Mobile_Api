@@ -125,9 +125,9 @@ class DSB:
         self._token = None
 
     def test_connection(self) -> bool:
-        """Test if credentials are valid."""
+        """Test if credentials are valid and cache the token."""
         try:
-            self._request_new_token()
+            self._token = self._request_new_token()
             return True
         except DSBError:
             return False
