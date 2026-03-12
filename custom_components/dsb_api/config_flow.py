@@ -105,11 +105,20 @@ class DSBConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if schedule_file:
                 path = self.hass.config.path(schedule_file)
-                exists = await self.hass.async_add_executor_job(
-                    os.path.exists, path
+                resolved = os.path.realpath(path)
+                config_dir = os.path.realpath(
+                    self.hass.config.config_dir
                 )
-                if not exists:
-                    errors[CONF_SCHEDULE_FILE] = "file_not_found"
+                if not resolved.startswith(
+                    config_dir + os.sep
+                ) and resolved != config_dir:
+                    errors[CONF_SCHEDULE_FILE] = "invalid_path"
+                else:
+                    exists = await self.hass.async_add_executor_job(
+                        os.path.exists, path
+                    )
+                    if not exists:
+                        errors[CONF_SCHEDULE_FILE] = "file_not_found"
 
             if not errors:
                 await self.async_set_unique_id(
@@ -185,11 +194,20 @@ class DSBOptionsFlow(config_entries.OptionsFlow):
 
             if schedule_file:
                 path = self.hass.config.path(schedule_file)
-                exists = await self.hass.async_add_executor_job(
-                    os.path.exists, path
+                resolved = os.path.realpath(path)
+                config_dir = os.path.realpath(
+                    self.hass.config.config_dir
                 )
-                if not exists:
-                    errors[CONF_SCHEDULE_FILE] = "file_not_found"
+                if not resolved.startswith(
+                    config_dir + os.sep
+                ) and resolved != config_dir:
+                    errors[CONF_SCHEDULE_FILE] = "invalid_path"
+                else:
+                    exists = await self.hass.async_add_executor_job(
+                        os.path.exists, path
+                    )
+                    if not exists:
+                        errors[CONF_SCHEDULE_FILE] = "file_not_found"
 
             if not errors:
                 new_data = {
