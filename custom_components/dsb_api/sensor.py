@@ -94,6 +94,14 @@ def _load_schedule(hass: HomeAssistant, filename: str) -> Dict[str, Any]:
     if not filename:
         return {}
     path = hass.config.path(filename)
+    # Validate path stays within config directory
+    resolved = os.path.realpath(path)
+    config_dir = os.path.realpath(hass.config.config_dir)
+    if not resolved.startswith(config_dir + os.sep) and resolved != config_dir:
+        _LOGGER.error(
+            "Schedule file path escapes config directory: %s", filename
+        )
+        return {}
     _LOGGER.debug("Looking for schedule at: %s", path)
     if not os.path.exists(path):
         _LOGGER.warning("Schedule file not found: %s", path)
