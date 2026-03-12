@@ -512,9 +512,15 @@ async def async_setup_entry(
     client = data["client"]
     hash_store = data["hash_store"]
 
-    schedule_file = config_entry.data.get(CONF_SCHEDULE_FILE, "")
-    enable_raw = config_entry.data.get(
-        CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+    schedule_file = config_entry.options.get(
+        CONF_SCHEDULE_FILE,
+        config_entry.data.get(CONF_SCHEDULE_FILE, ""),
+    )
+    enable_raw = config_entry.options.get(
+        CONF_ENABLE_RAW_SENSOR,
+        config_entry.data.get(
+            CONF_ENABLE_RAW_SENSOR, DEFAULT_ENABLE_RAW_SENSOR
+        ),
     )
 
     child_name_cfg = config_entry.data.get(CONF_CHILD_NAME, "")
@@ -530,8 +536,14 @@ async def async_setup_entry(
 
     await coordinator.async_config_entry_first_refresh()
 
-    child_name = config_entry.data.get(CONF_CHILD_NAME, "")
-    class_name = config_entry.data.get(CONF_CLASS_NAME, "")
+    child_name = config_entry.options.get(
+        CONF_CHILD_NAME,
+        config_entry.data.get(CONF_CHILD_NAME, ""),
+    )
+    class_name = config_entry.options.get(
+        CONF_CLASS_NAME,
+        config_entry.data.get(CONF_CLASS_NAME, ""),
+    )
 
     entities: list[SensorEntity] = []
 
