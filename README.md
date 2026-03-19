@@ -1,7 +1,7 @@
 # 📋 DSB Mobile API – Home Assistant Integration
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/workFLOw42/DSB_Mobile_Api/main/images/logo-hires.png" alt="DSB Mobile API" width="256">
+  <img src="https://raw.githubusercontent.com/workFLOw42/DSB_Mobile_Api/main/custom_components/dsb_api/brand/logo@2x.png" alt="DSB Mobile API" width="256">
 </p>
 
 <p align="center">
