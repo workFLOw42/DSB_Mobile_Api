@@ -259,10 +259,14 @@ def _find_dsb_for_stunde(
 
 
 def _is_entfall(entry: Dict[str, Any]) -> bool:
-    """Check if a DSB entry indicates cancellation."""
+    """Check if a DSB entry indicates cancellation for students."""
     art = str(entry.get("Art", "")).strip().lower()
     le_nach = str(entry.get("(Le.) nach", "") or "").strip().lower()
     text = str(entry.get("Text", "")).lower()
+    # "Entfall für Lehrer" means only the original teacher gets a free period;
+    # a substitute covers the class → no student cancellation.
+    if "für lehrer" in le_nach or "fuer lehrer" in le_nach:
+        return False
     return (
         art == "entfall"
         or "entfall" in le_nach
