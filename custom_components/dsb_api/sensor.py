@@ -354,9 +354,14 @@ class DSBCoordinator(DataUpdateCoordinator):
         schedule_file: str,
         hash_store: HashStore,
         child_name: str = "",
+        config_entry: Optional[ConfigEntry] = None,
     ) -> None:
         super().__init__(
-            hass, _LOGGER, name="DSB API", update_interval=None
+            hass,
+            _LOGGER,
+            name="DSB API",
+            update_interval=None,
+            config_entry=config_entry,
         )
         self.client = client
         self._schedule_file = schedule_file
@@ -529,7 +534,8 @@ async def async_setup_entry(
 
     child_name_cfg = config_entry.data.get(CONF_CHILD_NAME, "")
     coordinator = DSBCoordinator(
-        hass, client, schedule_file, hash_store, child_name_cfg
+        hass, client, schedule_file, hash_store, child_name_cfg,
+        config_entry=config_entry,
     )
 
     # Store coordinator in hass.data for service handlers
@@ -633,6 +639,7 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
             else "DSB Schulinfo"
         )
         self._attr_icon = "mdi:bulletin-board"
+        self._attr_native_unit_of_measurement = "Tage"
 
     def _build_schulinfo(self) -> Dict[str, Any]:
         if not self.coordinator.data:
@@ -686,10 +693,6 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
         }
         _warn_if_too_large("SchulInfoSensor", attrs)
         return attrs
-
-    @property
-    def unit_of_measurement(self) -> str:
-        return "Tage"
 
 
 # ──────────────────────────────────────────────
@@ -805,6 +808,7 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             f"DSB {child_name} {class_name} Vertretungsplan"
         )
         self._attr_icon = "mdi:school"
+        self._attr_native_unit_of_measurement = "Änderungen"
         # Cache to avoid recomputing on every property access
         self._cached_data_ref: Any = None
         self._cached_filtered: Dict[str, List[Dict[str, Any]]] = {}
@@ -922,10 +926,6 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         }
         _warn_if_too_large("StudentSensor", attrs)
         return attrs
-
-    @property
-    def unit_of_measurement(self) -> str:
-        return "Änderungen"
 
 
 # ──────────────────────────────────────────────
