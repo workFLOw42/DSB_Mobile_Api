@@ -639,7 +639,6 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
             else "DSB Schulinfo"
         )
         self._attr_icon = "mdi:bulletin-board"
-        self._attr_native_unit_of_measurement = "Tage"
 
     def _build_schulinfo(self) -> Dict[str, Any]:
         if not self.coordinator.data:
@@ -693,6 +692,10 @@ class DSBSchulInfoSensor(CoordinatorEntity, SensorEntity):
         }
         _warn_if_too_large("SchulInfoSensor", attrs)
         return attrs
+
+    @property
+    def unit_of_measurement(self) -> str:
+        return "Tage"
 
 
 # ──────────────────────────────────────────────
@@ -808,7 +811,6 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
             f"DSB {child_name} {class_name} Vertretungsplan"
         )
         self._attr_icon = "mdi:school"
-        self._attr_native_unit_of_measurement = "Änderungen"
         # Cache to avoid recomputing on every property access
         self._cached_data_ref: Any = None
         self._cached_filtered: Dict[str, List[Dict[str, Any]]] = {}
@@ -926,6 +928,10 @@ class DSBStudentSensor(CoordinatorEntity, SensorEntity):
         }
         _warn_if_too_large("StudentSensor", attrs)
         return attrs
+
+    @property
+    def unit_of_measurement(self) -> str:
+        return "Änderungen"
 
 
 # ──────────────────────────────────────────────
